@@ -266,4 +266,15 @@ allowed-tools: Read, Write, Edit, Glob, Grep
 
 ---
 
+## Layout Verification (Pretext-Based)
+
+Tailwind's utility classes set container widths, but text content may not fit. After building Tailwind layouts, verify text layout:
+
+- **Container queries**: Use `predict_text_layout` to verify text fits at each `@container` breakpoint width. Tailwind v4's container queries change layout at specific widths — verify text doesn't overflow at transition points.
+- **Responsive breakpoints**: `emulate_device` at each Tailwind breakpoint (sm:640, md:768, lg:1024, xl:1280) + `verify_layout` on text elements.
+- **Truncation utilities**: When using `truncate`, `line-clamp-*`, or `text-ellipsis`, verify with `detect_layout_issues` that content is intentionally truncated, not accidentally clipped.
+- **Typography scale**: Use `predict_text_layout` to check `text-xs` through `text-5xl` at target container widths — large headings often overflow on mobile.
+
+See `/pretext-layout` for full CSS patterns and verification checklist.
+
 > **Remember:** Tailwind v4 is CSS-first. Embrace CSS variables, container queries, and native features. The config file is now optional.

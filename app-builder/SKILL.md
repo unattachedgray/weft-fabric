@@ -72,4 +72,16 @@ App Builder Process:
 4. Coordinate agents
 5. Report progress
 6. Start preview
+7. Layout verification (verify_layout on buttons/cards/nav, detect_layout_issues, mobile viewport check)
 ```
+
+## Layout Verification (Web Projects)
+
+After the app builds and a dev server is running, verify text layout using pretext-based measurement:
+
+1. **Quick health check**: `read_page` with `layoutCheck:true` on each key page
+2. **Interactive elements**: `verify_layout` — buttons (maxLines:1), cards (fitsContainer), nav links (fitsWidth)
+3. **Mobile check**: `emulate_device` preset "iphone16" + `verify_layout` on same elements
+4. **Resolve**: Fix any high-severity issues (text_multiline_overflow, label_overflow) before delivery
+
+See `/pretext-layout` for full CSS patterns, commands, and verification checklist.

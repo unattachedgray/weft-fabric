@@ -188,6 +188,23 @@ docker-compose up -d
 kubectl apply -f k8s/
 ```
 
+## Layout Verification (Pretext-Based)
+
+After building or modifying components, verify text layout using canvas-based measurement (zero DOM reflow, uses `canvas.measureText()`).
+
+**During development:**
+- `predict_text_layout` — verify text fits containers before rendering (button labels, card titles at various widths)
+- `verify_layout` — check rendered elements: buttons `maxLines:1`, cards `fitsContainer:true`, nav `fitsWidth:true`
+
+**During review:**
+- `detect_layout_issues` with `checkTextFit:true` — catches `text_truncated`, `text_multiline_overflow`, `label_overflow`
+- `query_elements` with `measureText:true` — returns `textLayout` per element (naturalWidth, predictedLines, overflows)
+- `get_styles` — auto-includes `textLayout` prediction for any element with text
+
+**Responsive:** `emulate_device` (iphone16, ipad, desktop1080) + `verify_layout` at each breakpoint.
+
+See `/pretext-layout` for full CSS patterns and verification checklist.
+
 ## Troubleshooting
 
 ### Common Issues
