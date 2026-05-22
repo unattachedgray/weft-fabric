@@ -3,7 +3,7 @@
 A [Claude Code](https://docs.anthropic.com/en/docs/claude-code/skills) **plugin marketplace** (`unatt`) + a catalog of skills. Two distribution paths coexist:
 
 - **Plugin marketplace** (recommended) — `plugins/` directory, declared in `.claude-plugin/marketplace.json`. First-class Claude Code support, auto-updates on every push, multi-plugin selectivity per machine.
-- **Legacy flat skills** — the 76 top-level directories at the repo root. Installed by raw copy. Will be curated into concern-based plugins over time.
+- **Legacy flat skills** — the 62 top-level directories at the repo root. Installed by raw copy. Will be curated into concern-based plugins over time.
 
 ## Install (marketplace — recommended)
 
@@ -76,7 +76,7 @@ git add plugins/catalog/skills/browse-skills/SKILL.md && git commit -m "regen ca
 
 ## Legacy flat-skill install
 
-The 76 directories at the repo root are pre-marketplace skills, still installable via raw copy. They'll be migrated into concern-based plugins in a curation pass — drop unused, group kept ones, add detectors where description-based routing isn't reliable.
+The 62 directories at the repo root are pre-marketplace skills, still installable via raw copy. They'll be migrated into concern-based plugins in a curation pass — drop unused, group kept ones, add detectors where description-based routing isn't reliable.
 
 **All flat skills:**
 
@@ -95,7 +95,7 @@ curl -sL https://raw.githubusercontent.com/unattachedgray/claude-skills/main/$SK
   -o ~/.claude/skills/$SKILL/SKILL.md
 ```
 
-## Skills (77 legacy + 2 plugins)
+## Skills (62 legacy + 2 plugins)
 
 ### Development Lifecycle
 
@@ -118,9 +118,7 @@ curl -sL https://raw.githubusercontent.com/unattachedgray/claude-skills/main/$SK
 | [react-development](react-development/) | React hooks, TypeScript, Server Components, state management, routing |
 | [nextjs-development](nextjs-development/) | Next.js App Router, Server Components, data fetching, Vercel deployment |
 | [senior-frontend](senior-frontend/) | Modern web apps with React, Next.js, TypeScript, Tailwind CSS |
-| [frontend-guidelines](frontend-guidelines/) | Frontend patterns, architecture, and best practices |
 | [tailwind-patterns](tailwind-patterns/) | Tailwind CSS v4: CSS-first config, container queries, design tokens |
-| [3d-web-designer](3d-web-designer/) | Three.js, React Three Fiber, WebGPU for 3D web experiences |
 | [web-design-guidelines](web-design-guidelines/) | UI review for Web Interface Guidelines compliance |
 | [ui-design](ui-design/) | Design systems, component libraries, design tokens, responsive design |
 | [mobile-design](mobile-design/) | Mobile-first design for iOS and Android |
@@ -147,24 +145,14 @@ curl -sL https://raw.githubusercontent.com/unattachedgray/claude-skills/main/$SK
 | [docker-expert](docker-expert/) | Multi-stage builds, image optimization, container security, Compose |
 | [vercel-deployment](vercel-deployment/) | Deploying to Vercel with Next.js |
 | [github-workflow-automation](github-workflow-automation/) | PR reviews, issue triage, CI/CD, Git operations |
-| [linux-production-shell-scripts](linux-production-shell-scripts/) | Production shell script templates for system automation |
 | [bash-linux](bash-linux/) | Bash/Linux terminal patterns, commands, scripting |
-| [powershell-windows](powershell-windows/) | PowerShell Windows patterns, operator syntax, error handling |
 
 ### AI & Machine Learning
 
 | Skill | Description |
 |-------|-------------|
-| [senior-ml-engineer](senior-ml-engineer/) | ML productionization, MLOps, model deployment, feature stores |
 | [senior-data-scientist](senior-data-scientist/) | Statistical modeling, experimentation, causal inference, analytics |
 | [senior-data-engineer](senior-data-engineer/) | Data pipelines, ETL/ELT, Spark, Airflow, dbt, Kafka |
-| [long-context](long-context/) | Extend transformer context windows with RoPE, YaRN, ALiBi |
-| [senior-computer-vision](senior-computer-vision/) | Image/video processing, object detection, segmentation, vision AI |
-| [segment-anything-model](segment-anything-model/) | SAM for zero-shot image segmentation |
-| [blip-2-vision-language](blip-2-vision-language/) | Vision-language: captioning, VQA, image-text retrieval |
-| [stable-diffusion-image-generation](stable-diffusion-image-generation/) | Text-to-image generation with Stable Diffusion |
-| [whisper](whisper/) | Speech recognition: transcription, translation, 99 languages |
-| [audiocraft-audio-generation](audiocraft-audio-generation/) | Text-to-music (MusicGen) and text-to-sound (AudioGen) |
 | [langchain](langchain/) | LLM apps with agents, chains, RAG, 500+ integrations |
 
 ### AI Agents
@@ -181,7 +169,6 @@ curl -sL https://raw.githubusercontent.com/unattachedgray/claude-skills/main/$SK
 
 | Skill | Description |
 |-------|-------------|
-| [prompt-engineer](prompt-engineer/) | Prompt structure, context management, output formatting |
 | [senior-prompt-engineer](senior-prompt-engineer/) | Advanced prompt patterns, structured outputs, AI product dev |
 | [claude-api](claude-api/) | Build apps with Claude API, Anthropic SDK, Agent SDK |
 | [mcp-development](mcp-development/) | Build and integrate MCP servers for Claude Code |
@@ -230,7 +217,6 @@ curl -sL https://raw.githubusercontent.com/unattachedgray/claude-skills/main/$SK
 | Skill | Description |
 |-------|-------------|
 | [wordpress-development](wordpress-development/) | Block themes, plugins, REST API, Site Editor, wp.org compliance |
-| [game-development](game-development/) | Game development orchestrator, routes to platform-specific skills |
 
 ### Skill Management
 
@@ -239,7 +225,6 @@ curl -sL https://raw.githubusercontent.com/unattachedgray/claude-skills/main/$SK
 | [skill-detectors](plugins/skill-detectors/) | (Now a plugin in the `unatt` marketplace — install via `/plugin install skill-detectors@unatt`.) Surfaces context-conditional skills automatically at session start and on every prompt. See [Skill detectors](#skill-detectors) above. |
 | [skill-enhance](skill-enhance/) | Propagate a technology across your skill library |
 | [skill-development](skill-development/) | Full skill lifecycle: search, creation, testing, improvement |
-| [skill-factory](skill-factory/) | Create new skills by researching and composing existing ones |
 | [find-skills](find-skills/) | Discover and install skills from the ecosystem |
 
 
@@ -253,7 +238,8 @@ A skill is a markdown file at `~/.claude/skills/<name>/SKILL.md`. Claude Code lo
 
 ## Recent Changes
 
-- **Converted to a Claude Code plugin marketplace** (`unatt`). Added `.claude-plugin/marketplace.json` and two initial plugins: `skill-detectors` (the framework) and `catalog` (auto-regenerated skill index). Legacy flat skills coexist at the repo root pending curation.
+- **Curation pass 1.** Dropped 15 flat skills (specialist ML/CV/audio, niche platforms, WSL-irrelevant Windows-specific, and consolidated overlaps: `prompt-engineer` → `senior-prompt-engineer`, `linux-production-shell-scripts` → `bash-linux`, `skill-factory` → `skill-development`, `frontend-guidelines` → `senior-frontend`). Beefed up `wordpress-development` with Block Bindings API, Pattern Overrides, Section Styles, Interactivity API store, `register_rest_field`, `%i` SQL placeholder, Action Scheduler, `wp-env`, and `wp-scripts` internals.
+- **Converted to a Claude Code plugin marketplace** (`unatt`). Added `.claude-plugin/marketplace.json` and two initial plugins: `skill-detectors` (the framework) and `catalog` (auto-regenerated skill index). Legacy flat skills coexist at the repo root pending further curation.
 - Added `skill-detectors` framework as the first plugin: session-start hook surfaces disk-state signals, prompt-submit hook surfaces chat-mention candidates. See [Skill detectors](#skill-detectors).
 - Added Temporal (durable execution) guidance to agent-development, advanced-agents, senior-devops, senior-data-engineer, and backend-development skills
 - Pretext-layout text verification integrated across frontend skills

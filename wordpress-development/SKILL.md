@@ -383,6 +383,107 @@ npm install @wordpress/scripts --save-dev
 
 **JS:** `import { __ } from '@wordpress/i18n'`
 
+## Modern APIs & Tooling (WP 6.5+)
+
+### Block Bindings API (WP 6.5+, stable 6.7)
+
+Bind core block attributes (Paragraph text, Image src/alt, Button URL/label, Heading content) to dynamic sources (post meta, custom sources) without writing custom blocks. Removes most need for dynamic blocks when the difference is just "data source."
+
+```php
+register_block_bindings_source( 'my-plugin/featured-author', [
+    'label'              => __( 'Featured Author' ),
+    'get_value_callback' => function( $args, $block, $attr_name ) {
+        return get_post_meta( $block->context['postId'], 'featured_author', true );
+    },
+    'uses_context'       => [ 'postId' ],
+] );
+```
+
+In block markup (or via editor UI):
+```
+<!-- wp:paragraph {"metadata":{"bindings":{"content":{"source":"my-plugin/featured-author"}}}} -->
+```
+
+### Pattern Overrides (WP 6.6+)
+
+Synced patterns with per-instance overrides — replaces "reusable blocks" for the case where 90% should sync but specific fields shouldn't. Uses `core/pattern-overrides` source via `metadata.bindings`.
+
+### Section Styles (WP 6.6+)
+
+Block-level style variations defined in `theme.json` under `styles.blocks.[name].variations`. Users pick them from the editor. Replaces hand-rolled CSS classes for "card variant A / variant B."
+
+### Interactivity API store + state (WP 6.5+)
+
+The directives shown earlier (`data-wp-interactive`, `data-wp-on--click`, etc.) wire to a client-side store:
+
+```js
+import { store, getContext } from '@wordpress/interactivity';
+store( 'my-plugin', {
+    state: { isOpen: false },
+    actions: { toggle() { this.state.isOpen = !this.state.isOpen; } },
+} );
+```
+
+Hydrate from PHP:
+```php
+wp_interactivity_state( 'my-plugin', [ 'isOpen' => false ] );
+```
+
+Use `viewScriptModule` (not `viewScript`) in `block.json` to load as a native ES module.
+
+### REST: register_rest_field + schema
+
+For adding fields to existing object types (post, user, etc.) without a custom endpoint:
+
+```php
+register_rest_field( 'post', 'reading_time', [
+    'get_callback'    => fn( $obj ) => estimate_reading_time( $obj['content']['rendered'] ),
+    'update_callback' => null,
+    'schema'          => [ 'type' => 'integer', 'context' => [ 'view', 'edit' ] ],
+] );
+```
+
+Always define schema → enables auto-validation, self-documentation at `/wp-json`.
+
+### SQL: %i identifier placeholder (WP 6.2+)
+
+For dynamic table/column names, `%i` quotes identifiers safely. Replaces hand-escaping with backticks.
+
+```php
+$wpdb->prepare( "SELECT * FROM %i WHERE %i = %d", $table, $col, $id );
+```
+
+### Background jobs: Action Scheduler
+
+`wp_schedule_event()` is fine for light jobs but it's request-triggered (no real cron). For heavy work (queue processing, batched migrations, async API calls), use the **Action Scheduler** library — bundled with WooCommerce, available standalone. Persistent queue, retry logic, admin UI for inspection.
+
+### Local dev: wp-env
+
+`@wordpress/env` (`wp-env`) is the official Docker-based local dev environment. `.wp-env.json` configures core version, PHP version, plugins, themes, and mappings — repeatable team setups without LocalWP / MAMP variance.
+
+```json
+{
+  "core": "WordPress/WordPress#6.7",
+  "phpVersion": "8.2",
+  "plugins": [ ".", "WordPress/gutenberg" ],
+  "mappings": { "wp-content/uploads": "./test-uploads" }
+}
+```
+
+```bash
+wp-env start
+wp-env run cli wp plugin list
+```
+
+### Build tooling: wp-scripts internals
+
+`@wordpress/scripts` wraps webpack with sensible defaults. Reads `src/block.json` and emits `build/`.
+
+- `wp-scripts start` (watch) / `wp-scripts build` (prod) / `wp-scripts lint-js` / `format` / `test-unit-js`
+- Auto-emits `*.asset.php` per entry with `dependencies` (e.g., `wp-blocks`, `wp-element`) + content hash. **Always pass this asset file's `dependencies` and `version` to `wp_enqueue_script()`** — manual deps drift.
+- TypeScript supported via `tsconfig.json` + `.ts`/`.tsx`; `@wordpress/scripts` 27+ has built-in TS handling.
+- Custom webpack config: `webpack.config.js` extending `@wordpress/scripts/config/webpack.config`.
+
 ## Common Mistakes
 
 - Forgetting `show_in_rest => true` (breaks block editor + REST)
