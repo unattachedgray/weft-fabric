@@ -4,6 +4,5 @@
   "author": {
     "name": "unattachedgray",
     "url": "https://github.com/unattachedgray"
-  },
-  "hooks": "./hooks/hooks.json"
+  }
 }
