@@ -1,6 +1,6 @@
 {
   "name": "ai-agents",
-  "description": "Building autonomous AI agents: architecture, tool integration, persistent memory systems, multi-agent orchestration / computer-use patterns, local CLI agent management, and refactoring bloated AGENTS.md/CLAUDE.md instruction files.",
+  "description": "Building autonomous AI agents: architecture, tool integration, persistent memory systems, multi-agent orchestration / computer-use patterns, local CLI agent management, refactoring bloated AGENTS.md/CLAUDE.md files, and WALT (Salesforce) for auto-discovering reusable browser-automation tools from any website.",
   "author": {
     "name": "unattachedgray",
     "url": "https://github.com/unattachedgray"

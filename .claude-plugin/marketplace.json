@@ -42,12 +42,12 @@
     {
       "name": "claude-stack",
       "source": "./plugins/claude-stack",
-      "description": "Anthropic ecosystem: Claude API / Agent SDK app development (with prompt caching), MCP server building, Gemini CLI for large-context review, and advanced LLM prompt engineering patterns."
+      "description": "Anthropic ecosystem + cross-model tools: Claude API / Agent SDK app development (with prompt caching), MCP server building, Gemini CLI for large-context review, parallel Gemini + Codex cross-validation (multi-ai-review), bundled monthly-refreshed LLM API pricing reference (llm-api-pricing), and advanced LLM prompt engineering patterns."
     },
     {
       "name": "ai-agents",
       "source": "./plugins/ai-agents",
-      "description": "Building autonomous AI agents: architecture, tool integration, persistent memory systems, multi-agent orchestration / computer-use patterns, local CLI agent management, and refactoring bloated AGENTS.md/CLAUDE.md instruction files."
+      "description": "Building autonomous AI agents: architecture, tool integration, persistent memory systems, multi-agent orchestration / computer-use patterns, local CLI agent management, refactoring bloated AGENTS.md/CLAUDE.md files, and WALT (Salesforce) for auto-discovering reusable browser-automation tools from any website."
     },
     {
       "name": "ai-ml",

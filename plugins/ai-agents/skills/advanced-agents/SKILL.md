@@ -125,6 +125,31 @@ class ComputerUseAgent:
         return {"success": False, "error": "Unknown action type"}
 ```
 
+### Alternative perception layer: OS accessibility trees
+
+Vision is the default perception layer, but the **OS accessibility tree** is often a better primitive for desktop computer-use. Every major platform exposes a structured tree of UI elements with stable roles, names, values, and bounding boxes:
+
+| Platform | API | Read it from |
+|---|---|---|
+| macOS | AppKit Accessibility (AX) | `pyobjc` (Python), `macapptree` |
+| Windows | UI Automation (UIA) | `uiautomation` (Python), `pywinauto` |
+| Linux (GNOME) | AT-SPI 2 | `pyatspi` (Python), GJS / atspi-2.0 (TypeScript) |
+
+A normalized cross-platform schema (one node = `{name, role, description, value, bbox, children}`) is sketched in [viralmind-ai/ax-tree-parsers](https://github.com/viralmind-ai/ax-tree-parsers) — useful as a reference, not a dependency.
+
+**When the a11y tree wins over vision:**
+- Faster (no screenshot encode → no vision-token cost → no 1-5s "thinking" pause)
+- Deterministic element identity (no coordinate drift, no resize-induced misses)
+- Lets you query elements by role/name instead of pixel-hunting
+- Works in headless / off-screen contexts where screenshots don't help
+
+**When vision still wins:**
+- Apps with poor accessibility implementation (some Electron apps, custom canvas/WebGL UIs, games)
+- Rendered web content inside a browser — use Playwright's `page.accessibility.snapshot()` instead of the OS tree, since the OS tree only sees the browser chrome
+- Visual states a11y doesn't capture (color, layout, partial occlusion)
+
+The strongest pattern is **hybrid**: use the a11y tree to enumerate candidates and ground the model in structured names, then fall back to a screenshot only when the tree is empty or ambiguous.
+
 ---
 
 ## 2. Sandboxed Environment Pattern

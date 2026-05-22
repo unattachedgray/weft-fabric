@@ -1,0 +1,42 @@
+name: Refresh LLM pricing benchmark
+
+on:
+  schedule:
+    - cron: "0 9 1 * *"  # 09:00 UTC on the 1st of every month
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: |
+          pip install --quiet google-genai anthropic requests beautifulsoup4
+
+      - name: Refresh benchmark
+        env:
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          python plugins/claude-stack/skills/llm-api-pricing/scripts/update_benchmark.py
+
+      - name: Open PR
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "chore: refresh LLM pricing benchmark"
+          branch: refresh-llm-pricing
+          title: "Monthly LLM pricing benchmark refresh"
+          body: |
+            Automated monthly refresh of `references/benchmark.md`.
+
+            Validation warnings are in `.benchmark_warnings.json`.
+            Review the diff before merging — confirm no hallucinated models slipped past the gate.
