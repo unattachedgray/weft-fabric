@@ -57,6 +57,16 @@ If all three hold, propose a detector: name the trigger condition, the action (`
 
 If any criterion fails, don't bring it up — just answer the user's actual question.
 
+## Search order when picking a skill
+
+When evaluating a `SKILL_SIGNAL_CANDIDATE`, picking a skill to invoke for a task, or about to fall back to a default tool, search in this order:
+
+1. **Installed skills** — already in your session's skill listing. Match by description.
+2. **`unatt` catalog** — `/catalog:browse-skills`. Auto-installable per `auto-install-unatt-plugins` memory.
+3. **External marketplaces** — `/catalog:external-skills`. Runtime lookup via `claude plugin list --available --json`. ~215 plugins across `@claude-plugins-official` and `@anthropic-agent-skills` covering domains `unatt` doesn't (Stripe, Airtable, Apollo, Amplitude, AWS toolkits, language LSPs, etc.).
+
+Only fall back to default tools or generic knowledge if 1–3 yield nothing. Never recommend a skill name from training-data memory alone — always verify via the runtime listing or `gh repo view`.
+
 ## Architecture
 
 ```

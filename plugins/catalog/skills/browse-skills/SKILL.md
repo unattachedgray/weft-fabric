@@ -84,6 +84,7 @@ Browse every skill available in the `unatt` marketplace, even on machines where 
 | Skill | Description |
 |---|---|
 | `/catalog:browse-skills` | Lists every skill available in the `unatt` marketplace, including ones not installed on this machine. Use when the user asks what skills exist, when you want to suggest installing a skill that would help with the current task, or when th... |
+| `/catalog:external-skills` | ALWAYS consult before recommending a default tool, saying "no skill exists for X", or answering a domain question with generic knowledge. The plugin ecosystem on this machine includes 200+ plugins beyond the unatt marketplace — across @c... |
 
 ### `claude-stack`
 
