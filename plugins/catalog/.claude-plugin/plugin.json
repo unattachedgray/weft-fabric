@@ -1,0 +1,8 @@
+{
+  "name": "catalog",
+  "description": "Browse every skill available in the `unatt` marketplace, even on machines where most plugins aren't installed. The catalog SKILL.md is auto-generated from each plugin's metadata; commit-SHA versioning means every push refreshes it on all machines at next session start.",
+  "author": {
+    "name": "unattachedgray",
+    "url": "https://github.com/unattachedgray"
+  }
+}

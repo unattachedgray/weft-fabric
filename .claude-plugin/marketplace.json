@@ -1,0 +1,23 @@
+{
+  "name": "unatt",
+  "owner": {
+    "name": "unattachedgray",
+    "url": "https://github.com/unattachedgray"
+  },
+  "metadata": {
+    "description": "Curated Claude Code skills + the skill-detectors framework. Plugins use commit-SHA versioning, so every push refreshes consumers on next session start.",
+    "url": "https://github.com/unattachedgray/claude-skills"
+  },
+  "plugins": [
+    {
+      "name": "skill-detectors",
+      "source": "./plugins/skill-detectors",
+      "description": "Two-leg framework that surfaces context-conditional skills automatically. SessionStart hook watches disk state and emits SKILL_SIGNAL markers (offer/route/constrain). UserPromptSubmit hook watches chat content and emits SKILL_SIGNAL_CANDIDATE markers when the user mentions something that may warrant a new detector. Solves the 'I installed it but always forget to invoke it' problem for context-conditional tools."
+    },
+    {
+      "name": "catalog",
+      "source": "./plugins/catalog",
+      "description": "Index of every skill available in this marketplace. Install on every machine — even machines that don't have all plugins installed will know what's available, so Claude can suggest installing on demand."
+    }
+  ]
+}

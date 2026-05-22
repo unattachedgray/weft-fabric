@@ -1,17 +1,93 @@
 # claude-skills
 
-Reusable skills for [Claude Code](https://docs.anthropic.com/en/docs/claude-code/skills). Drop any skill into `~/.claude/skills/` and it's available across all projects.
+A [Claude Code](https://docs.anthropic.com/en/docs/claude-code/skills) **plugin marketplace** (`unatt`) + a catalog of skills. Two distribution paths coexist:
 
-## Install
+- **Plugin marketplace** (recommended) — `plugins/` directory, declared in `.claude-plugin/marketplace.json`. First-class Claude Code support, auto-updates on every push, multi-plugin selectivity per machine.
+- **Legacy flat skills** — the 76 top-level directories at the repo root. Installed by raw copy. Will be curated into concern-based plugins over time.
 
-**All skills:**
+## Install (marketplace — recommended)
+
+Add the marketplace once per machine:
+
+```
+/plugin marketplace add unattachedgray/claude-skills
+```
+
+Then install plugins selectively:
+
+```
+/plugin install skill-detectors@unatt
+/plugin install catalog@unatt
+```
+
+Browse what's available:
+
+```
+/plugin marketplace browse unatt
+```
+
+…or, once `catalog` is installed, read `/catalog:browse-skills`. The catalog auto-regenerates on every push (commit-SHA versioning) so all machines see new entries at next session start.
+
+### Available plugins
+
+| Plugin | What it does |
+|---|---|
+| [`skill-detectors`](plugins/skill-detectors/) | Surfaces context-conditional skills automatically. SessionStart watches disk state and emits `SKILL_SIGNAL` markers (`offer` / `route` / `constrain`); UserPromptSubmit watches chat content and emits `SKILL_SIGNAL_CANDIDATE` markers when the user mentions something that may warrant a new detector. |
+| [`catalog`](plugins/catalog/) | Index of every skill across every plugin in this marketplace. Installed on every machine even when other plugins aren't, so Claude knows what's available to suggest installing. |
+
+## Skill detectors
+
+The `skill-detectors` plugin is the highest-value entry. It addresses the *forgetting problem*: you install a categorically-better tool, you know it exists, and you still reach for the default every time because your habit fires faster than your memory. Two hooks invert that:
+
+| Hook | Watches | Fires | Marker |
+|---|---|---|---|
+| `SessionStart` → `run-all.sh` → `detectors/*.sh` | Project state on disk (files, manifests, env) | Once per session | `SKILL_SIGNAL` |
+| `UserPromptSubmit` → `run-prompt-detectors.sh` → `prompt-detectors/*.sh` | The user's prompt text | On every user message | `SKILL_SIGNAL_CANDIDATE` |
+
+### Existing detectors
+
+| Detector | Type | Fires when |
+|---|---|---|
+| `detectors/graphify.sh` | disk | Git repo with ≥30 source files and no `graphify-out/` — offers `/graphify .` |
+| `detectors/pretext.sh` | disk | `package.json` declares `@chenglou/pretext` — constrains text-height work to pretext APIs |
+| `detectors/ast-grep.sh` | disk | `ast-grep` on PATH in a code project — routes structural pattern queries to ast-grep |
+| `prompt-detectors/github-url.sh` | chat | Prompt contains a GitHub repo reference — emits a candidate signal |
+
+### Adding a detector
+
+Drop a new `.sh` file under `plugins/skill-detectors/detectors/` (disk) or `plugins/skill-detectors/prompt-detectors/` (chat). Contract:
+
+- Exit `0` with no output when no match. Emit one or more single-line JSON markers prefixed with `SKILL_SIGNAL ` (disk) or `SKILL_SIGNAL_CANDIDATE ` (chat) when something fires.
+- Be cheap — target under 100ms (disk) or 50ms (chat).
+- Self-contained. No shared state between detectors.
+
+See `plugins/skill-detectors/skills/skill-detectors/SKILL.md` for the full marker schema and the three-criteria gate Claude uses to evaluate candidates. Once added, commit + push — every machine fetches the update at next session start.
+
+### Catalog regeneration
+
+When you add or modify plugins/skills, regenerate the catalog before pushing:
+
+```
+bash scripts/regen-catalog.sh
+git add plugins/catalog/skills/browse-skills/SKILL.md && git commit -m "regen catalog"
+```
+
+(Optional but recommended — the catalog is what tells every machine what's possible.)
+
+## Legacy flat-skill install
+
+The 76 directories at the repo root are pre-marketplace skills, still installable via raw copy. They'll be migrated into concern-based plugins in a curation pass — drop unused, group kept ones, add detectors where description-based routing isn't reliable.
+
+**All flat skills:**
+
 ```bash
 git clone https://github.com/unattachedgray/claude-skills.git /tmp/cs
 cp -r /tmp/cs/*/ ~/.claude/skills/
 rm -rf /tmp/cs
 ```
 
-**Single skill:**
+**Single flat skill:**
+
 ```bash
 SKILL=pretext-layout  # change to any skill name
 mkdir -p ~/.claude/skills/$SKILL
@@ -19,7 +95,7 @@ curl -sL https://raw.githubusercontent.com/unattachedgray/claude-skills/main/$SK
   -o ~/.claude/skills/$SKILL/SKILL.md
 ```
 
-## Skills (76)
+## Skills (77 legacy + 2 plugins)
 
 ### Development Lifecycle
 
@@ -160,6 +236,7 @@ curl -sL https://raw.githubusercontent.com/unattachedgray/claude-skills/main/$SK
 
 | Skill | Description |
 |-------|-------------|
+| [skill-detectors](plugins/skill-detectors/) | (Now a plugin in the `unatt` marketplace — install via `/plugin install skill-detectors@unatt`.) Surfaces context-conditional skills automatically at session start and on every prompt. See [Skill detectors](#skill-detectors) above. |
 | [skill-enhance](skill-enhance/) | Propagate a technology across your skill library |
 | [skill-development](skill-development/) | Full skill lifecycle: search, creation, testing, improvement |
 | [skill-factory](skill-factory/) | Create new skills by researching and composing existing ones |
@@ -176,9 +253,10 @@ A skill is a markdown file at `~/.claude/skills/<name>/SKILL.md`. Claude Code lo
 
 ## Recent Changes
 
+- **Converted to a Claude Code plugin marketplace** (`unatt`). Added `.claude-plugin/marketplace.json` and two initial plugins: `skill-detectors` (the framework) and `catalog` (auto-regenerated skill index). Legacy flat skills coexist at the repo root pending curation.
+- Added `skill-detectors` framework as the first plugin: session-start hook surfaces disk-state signals, prompt-submit hook surfaces chat-mention candidates. See [Skill detectors](#skill-detectors).
 - Added Temporal (durable execution) guidance to agent-development, advanced-agents, senior-devops, senior-data-engineer, and backend-development skills
 - Pretext-layout text verification integrated across frontend skills
-- 76 skills total (up from 16), removed personal/platform-specific skills
 
 ## License
 

@@ -1,0 +1,9 @@
+{
+  "name": "skill-detectors",
+  "description": "Two-leg framework for the 'forgetting problem' — surfaces context-conditional tools at the moment they apply, so the user doesn't have to remember to invoke them. SessionStart watches disk state; UserPromptSubmit watches chat content.",
+  "author": {
+    "name": "unattachedgray",
+    "url": "https://github.com/unattachedgray"
+  },
+  "hooks": "./hooks/hooks.json"
+}
