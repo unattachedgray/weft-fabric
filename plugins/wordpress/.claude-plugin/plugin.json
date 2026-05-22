@@ -1,0 +1,8 @@
+{
+  "name": "wordpress",
+  "description": "Comprehensive WordPress development: block themes + Site Editor, custom blocks (apiVersion 3, Block Bindings, Pattern Overrides, Section Styles), plugin architecture, REST API with schema, Interactivity API (store/state), performance, security, accessibility (WCAG 2.2 AA), wp.org compliance, wp-env + wp-scripts.",
+  "author": {
+    "name": "unattachedgray",
+    "url": "https://github.com/unattachedgray"
+  }
+}

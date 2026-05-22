@@ -1,0 +1,8 @@
+{
+  "name": "workflow",
+  "description": "Project-agnostic workflow skills: structured development lifecycle, PRD-driven autonomous builds, eval testing, persona switching, multi-step planning, brainstorming, and full-stack app orchestration from natural-language input.",
+  "author": {
+    "name": "unattachedgray",
+    "url": "https://github.com/unattachedgray"
+  }
+}

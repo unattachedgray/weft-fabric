@@ -1,11 +1,8 @@
 # claude-skills
 
-A [Claude Code](https://docs.anthropic.com/en/docs/claude-code/skills) **plugin marketplace** (`unatt`) + a catalog of skills. Two distribution paths coexist:
+A [Claude Code](https://docs.anthropic.com/en/docs/claude-code/skills) **plugin marketplace** (`unatt`) — curated skills for development, AI/ML, content, business, and ops, plus a meta-skill framework (`skill-detectors`) that surfaces context-conditional skills automatically.
 
-- **Plugin marketplace** (recommended) — `plugins/` directory, declared in `.claude-plugin/marketplace.json`. First-class Claude Code support, auto-updates on every push, multi-plugin selectivity per machine.
-- **Legacy flat skills** — the 62 top-level directories at the repo root. Installed by raw copy. Will be curated into concern-based plugins over time.
-
-## Install (marketplace — recommended)
+## Install
 
 Add the marketplace once per machine:
 
@@ -13,38 +10,65 @@ Add the marketplace once per machine:
 /plugin marketplace add unattachedgray/claude-skills
 ```
 
-Then install plugins selectively:
+Then install plugins selectively (see [Plugins](#plugins) below for what each covers):
 
 ```
 /plugin install skill-detectors@unatt
 /plugin install catalog@unatt
+/plugin install workflow@unatt
+/plugin install frontend@unatt
+# ...
 ```
 
-Browse what's available:
+Always-recommended foundation: `skill-detectors` + `catalog`. The rest depends on what each machine actually does.
+
+Reload after install:
 
 ```
-/plugin marketplace browse unatt
+/reload-plugins
 ```
 
-…or, once `catalog` is installed, read `/catalog:browse-skills`. The catalog auto-regenerates on every push (commit-SHA versioning) so all machines see new entries at next session start.
+## Updating
 
-### Available plugins
+Plugins use commit-SHA versioning — every push to this repo bumps the version of every plugin. Claude Code auto-fetches at session start. Force-refresh now:
 
-| Plugin | What it does |
-|---|---|
-| [`skill-detectors`](plugins/skill-detectors/) | Surfaces context-conditional skills automatically. SessionStart watches disk state and emits `SKILL_SIGNAL` markers (`offer` / `route` / `constrain`); UserPromptSubmit watches chat content and emits `SKILL_SIGNAL_CANDIDATE` markers when the user mentions something that may warrant a new detector. |
-| [`catalog`](plugins/catalog/) | Index of every skill across every plugin in this marketplace. Installed on every machine even when other plugins aren't, so Claude knows what's available to suggest installing. |
+```
+/plugin marketplace update unatt
+/reload-plugins
+```
+
+## Plugins
+
+| Plugin | Skills | What it covers |
+|---|---|---|
+| [`skill-detectors`](plugins/skill-detectors/) | 1 + hooks | Surfaces context-conditional skills automatically — SessionStart emits `SKILL_SIGNAL` markers from disk state, UserPromptSubmit emits `SKILL_SIGNAL_CANDIDATE` markers from chat content. See [Skill detectors](#skill-detectors). |
+| [`catalog`](plugins/catalog/) | 1 | Auto-regenerated index of every skill across every plugin in this marketplace. Install on every machine so Claude knows what's available even if uninstalled. |
+| [`workflow`](plugins/workflow/) | 7 | Project-agnostic dev lifecycle, builds, evals, persona switching, planning, brainstorming, full-stack scaffolding from natural language. |
+| [`frontend`](plugins/frontend/) | 10 | React + Next.js, Tailwind v4, design systems, mobile-first, browser automation, theme application, accessibility/WIG, text-aware layout via pretext. |
+| [`backend`](plugins/backend/) | 8 | Node.js / TypeScript microservices, system architecture, schema design, API integration, type-level TS, JS fundamentals, Bun. |
+| [`devops`](plugins/devops/) | 5 | CI/CD, containers, Vercel + Next.js, GitHub workflow automation, Bash/Linux patterns. |
+| [`claude-stack`](plugins/claude-stack/) | 3 | Anthropic ecosystem — Claude API / Agent SDK, MCP servers, Gemini CLI for big-context review, advanced prompt engineering. |
+| [`ai-agents`](plugins/ai-agents/) | 5 | Building autonomous agents: architecture, memory, multi-agent orchestration, local CLI agent management, AGENTS.md/CLAUDE.md refactoring. |
+| [`ai-ml`](plugins/ai-ml/) | 3 | Data science, data engineering, LangChain for LLM apps with agents/RAG/tool calling. |
+| [`review`](plugins/review/) | 3 | Code quality, security review (auth/secrets/vulnerabilities), security audit (secrets/ports/DB integrity). |
+| [`content`](plugins/content/) | 4 | PDF manipulation, local-file NotebookLM-style analysis (FTS5+MCP), Google NotebookLM via browser, meme generation. |
+| [`business`](plugins/business/) | 5 | CEO advisory, marketing ideas, App Store Optimization, UX research, email systems. |
+| [`automation`](plugins/automation/) | 3 | Jira workflows, metric watchers/alerts, Zapier orchestration via MCP + webhooks. |
+| [`wordpress`](plugins/wordpress/) | 1 | Comprehensive WordPress development — block themes, custom blocks (apiVersion 3, Block Bindings, Pattern Overrides, Section Styles), plugins, REST API, Interactivity API, performance, security, a11y (WCAG 2.2 AA), wp.org compliance, wp-env + wp-scripts. |
+| [`skill-management`](plugins/skill-management/) | 3 | Discover, create, and propagate skills across your library. |
+
+For the live skill-by-skill catalog, install `catalog@unatt` and read `/catalog:browse-skills` — it's regenerated on every push.
 
 ## Skill detectors
 
-The `skill-detectors` plugin is the highest-value entry. It addresses the *forgetting problem*: you install a categorically-better tool, you know it exists, and you still reach for the default every time because your habit fires faster than your memory. Two hooks invert that:
+The `skill-detectors` plugin addresses the *forgetting problem*: you install a categorically-better tool, you know it exists, and you still reach for the default every time because habit fires faster than memory. Two hooks invert that:
 
 | Hook | Watches | Fires | Marker |
 |---|---|---|---|
-| `SessionStart` → `run-all.sh` → `detectors/*.sh` | Project state on disk (files, manifests, env) | Once per session | `SKILL_SIGNAL` |
+| `SessionStart` → `run-all.sh` → `detectors/*.sh` | Project state on disk | Once per session | `SKILL_SIGNAL` |
 | `UserPromptSubmit` → `run-prompt-detectors.sh` → `prompt-detectors/*.sh` | The user's prompt text | On every user message | `SKILL_SIGNAL_CANDIDATE` |
 
-### Existing detectors
+Existing detectors:
 
 | Detector | Type | Fires when |
 |---|---|---|
@@ -53,196 +77,51 @@ The `skill-detectors` plugin is the highest-value entry. It addresses the *forge
 | `detectors/ast-grep.sh` | disk | `ast-grep` on PATH in a code project — routes structural pattern queries to ast-grep |
 | `prompt-detectors/github-url.sh` | chat | Prompt contains a GitHub repo reference — emits a candidate signal |
 
-### Adding a detector
+Adding a detector: drop a new `.sh` file under `plugins/skill-detectors/detectors/` (disk) or `plugins/skill-detectors/prompt-detectors/` (chat). Contract:
 
-Drop a new `.sh` file under `plugins/skill-detectors/detectors/` (disk) or `plugins/skill-detectors/prompt-detectors/` (chat). Contract:
-
-- Exit `0` with no output when no match. Emit one or more single-line JSON markers prefixed with `SKILL_SIGNAL ` (disk) or `SKILL_SIGNAL_CANDIDATE ` (chat) when something fires.
-- Be cheap — target under 100ms (disk) or 50ms (chat).
+- Exit `0` with no output when no match. Emit one or more single-line JSON markers prefixed with `SKILL_SIGNAL ` (disk) or `SKILL_SIGNAL_CANDIDATE ` (chat).
+- Be cheap — under 100ms (disk) or 50ms (chat).
 - Self-contained. No shared state between detectors.
 
-See `plugins/skill-detectors/skills/skill-detectors/SKILL.md` for the full marker schema and the three-criteria gate Claude uses to evaluate candidates. Once added, commit + push — every machine fetches the update at next session start.
+See `plugins/skill-detectors/skills/skill-detectors/SKILL.md` for the full marker schema and the three-criteria gate Claude uses to evaluate candidates.
 
-### Catalog regeneration
+## Adding or modifying skills
 
-When you add or modify plugins/skills, regenerate the catalog before pushing:
+Skills live at `plugins/<plugin>/skills/<skill-name>/SKILL.md` — auto-discovered by Claude Code (no manifest listing required).
+
+To add a new skill to an existing plugin:
 
 ```
-bash scripts/regen-catalog.sh
-git add plugins/catalog/skills/browse-skills/SKILL.md && git commit -m "regen catalog"
+mkdir -p plugins/<plugin>/skills/<new-skill>
+$EDITOR plugins/<plugin>/skills/<new-skill>/SKILL.md
+bash scripts/release.sh "add <new-skill>"
 ```
 
-(Optional but recommended — the catalog is what tells every machine what's possible.)
+To add a whole new plugin: also create `plugins/<plugin>/.claude-plugin/plugin.json` and add a row in `.claude-plugin/marketplace.json`.
 
-## Legacy flat-skill install
+`scripts/release.sh` does the whole publish cycle: regenerates the catalog, stages everything, commits with your message, and pushes. After the push, every consumer machine auto-fetches at next session start (or run `/plugin marketplace update unatt` to refresh now).
 
-The 62 directories at the repo root are pre-marketplace skills, still installable via raw copy. They'll be migrated into concern-based plugins in a curation pass — drop unused, group kept ones, add detectors where description-based routing isn't reliable.
+## How plugins work
 
-**All flat skills:**
+Each plugin is a directory with:
 
-```bash
-git clone https://github.com/unattachedgray/claude-skills.git /tmp/cs
-cp -r /tmp/cs/*/ ~/.claude/skills/
-rm -rf /tmp/cs
+```
+plugins/<name>/
+├── .claude-plugin/
+│   └── plugin.json       # manifest (name, description, author)
+├── skills/               # auto-discovered, prefixed as /<plugin>:<skill>
+│   └── <skill>/SKILL.md
+└── hooks/                # optional — declared in plugin.json or auto-discovered
+    └── hooks.json
 ```
 
-**Single flat skill:**
-
-```bash
-SKILL=pretext-layout  # change to any skill name
-mkdir -p ~/.claude/skills/$SKILL
-curl -sL https://raw.githubusercontent.com/unattachedgray/claude-skills/main/$SKILL/SKILL.md \
-  -o ~/.claude/skills/$SKILL/SKILL.md
-```
-
-## Skills (62 legacy + 2 plugins)
-
-### Development Lifecycle
-
-| Skill | Description |
-|-------|-------------|
-| [dev](dev/) | 7-phase development process (think/plan/build/review/test/ship/reflect) |
-| [build](build/) | PRD-driven autonomous build loop with quality gates |
-| [eval](eval/) | Test skills against predefined eval cases |
-| [hats](hats/) | Switch into a focused persona: architect, reviewer, debugger, etc. |
-| [writing-plans](writing-plans/) | Plan multi-step tasks from specs before touching code |
-| [brainstorming](brainstorming/) | Explore intent, requirements, and design before implementation |
-| [simplify](simplify/) | Review changed code for reuse, quality, and efficiency |
-
-### Frontend & UI
-
-| Skill | Description |
-|-------|-------------|
-| [pretext-layout](pretext-layout/) | Text-aware frontend design via canvas measureText() — zero-reflow text measurement |
-| [browser](browser/) | Chrome automation: tabs, screenshots, forms, extraction, accessibility |
-| [react-development](react-development/) | React hooks, TypeScript, Server Components, state management, routing |
-| [nextjs-development](nextjs-development/) | Next.js App Router, Server Components, data fetching, Vercel deployment |
-| [senior-frontend](senior-frontend/) | Modern web apps with React, Next.js, TypeScript, Tailwind CSS |
-| [tailwind-patterns](tailwind-patterns/) | Tailwind CSS v4: CSS-first config, container queries, design tokens |
-| [web-design-guidelines](web-design-guidelines/) | UI review for Web Interface Guidelines compliance |
-| [ui-design](ui-design/) | Design systems, component libraries, design tokens, responsive design |
-| [mobile-design](mobile-design/) | Mobile-first design for iOS and Android |
-| [theme-factory](theme-factory/) | Apply pre-set or custom themes to any artifact |
-
-### Backend & Architecture
-
-| Skill | Description |
-|-------|-------------|
-| [backend-development](backend-development/) | Node.js/Express/TypeScript microservices with layered architecture |
-| [senior-architect](senior-architect/) | System design with React, Next.js, Node, Go, Python, Postgres, GraphQL |
-| [senior-fullstack](senior-fullstack/) | Full-stack apps with React, Next.js, Node.js, GraphQL, PostgreSQL |
-| [database-design](database-design/) | Schema architecture, SQL/NoSQL, normalization, indexing, migrations |
-| [api-integration](api-integration/) | Third-party API integration, OAuth, webhooks, rate limiting |
-| [typescript-expert](typescript-expert/) | Type-level programming, performance, monorepos, migration strategies |
-| [javascript-mastery](javascript-mastery/) | 33+ essential JS concepts from fundamentals to advanced patterns |
-| [bun-development](bun-development/) | Bun runtime: package management, bundling, testing, Node.js migration |
-
-### DevOps & Infrastructure
-
-| Skill | Description |
-|-------|-------------|
-| [senior-devops](senior-devops/) | CI/CD, infrastructure automation, containerization, cloud platforms |
-| [docker-expert](docker-expert/) | Multi-stage builds, image optimization, container security, Compose |
-| [vercel-deployment](vercel-deployment/) | Deploying to Vercel with Next.js |
-| [github-workflow-automation](github-workflow-automation/) | PR reviews, issue triage, CI/CD, Git operations |
-| [bash-linux](bash-linux/) | Bash/Linux terminal patterns, commands, scripting |
-
-### AI & Machine Learning
-
-| Skill | Description |
-|-------|-------------|
-| [senior-data-scientist](senior-data-scientist/) | Statistical modeling, experimentation, causal inference, analytics |
-| [senior-data-engineer](senior-data-engineer/) | Data pipelines, ETL/ELT, Spark, Airflow, dbt, Kafka |
-| [langchain](langchain/) | LLM apps with agents, chains, RAG, 500+ integrations |
-
-### AI Agents
-
-| Skill | Description |
-|-------|-------------|
-| [agent-development](agent-development/) | Building autonomous AI agents with tool integration and memory |
-| [advanced-agents](advanced-agents/) | Computer-use agents, parallel systems, vision-based control |
-| [agent-manager-skill](agent-manager-skill/) | Manage local CLI agents via tmux, cron scheduling |
-| [agent-memory](agent-memory/) | Persistent memory systems for AI agents |
-| [agent-md-refactor](agent-md-refactor/) | Refactor bloated AGENTS.md/CLAUDE.md into organized docs |
-
-### Prompt Engineering & Claude
-
-| Skill | Description |
-|-------|-------------|
-| [senior-prompt-engineer](senior-prompt-engineer/) | Advanced prompt patterns, structured outputs, AI product dev |
-| [claude-api](claude-api/) | Build apps with Claude API, Anthropic SDK, Agent SDK |
-| [mcp-development](mcp-development/) | Build and integrate MCP servers for Claude Code |
-| [gemini](gemini/) | Run Gemini CLI for code review and big context (>200k) processing |
-
-### Security
-
-| Skill | Description |
-|-------|-------------|
-| [security-audit](security-audit/) | Audit secrets, permissions, ports, auth, DB integrity |
-| [security-review](security-review/) | Auth, input validation, secrets management, vulnerability detection |
-| [code-quality](code-quality/) | Code review, refactoring, coding standards, best practices |
-
-### Content & Media
-
-| Skill | Description |
-|-------|-------------|
-| [pdf](pdf/) | PDF manipulation: extract, create, merge, split, fill forms |
-| [meme-factory](meme-factory/) | Generate memes via memegen.link API |
-| [notebook](notebook/) | NotebookLM-style document-grounded analysis with source citations |
-| [notebooklm](notebooklm/) | Query Google NotebookLM notebooks from Claude Code |
-
-### Business & Strategy
-
-| Skill | Description |
-|-------|-------------|
-| [ceo-advisor](ceo-advisor/) | Executive leadership, strategy, financial modeling, board governance |
-| [marketing-ideas](marketing-ideas/) | Marketing strategies and growth ideas for SaaS products |
-| [app-store-optimization](app-store-optimization/) | ASO toolkit for Apple App Store and Google Play |
-| [ux-research](ux-research/) | User interviews, usability testing, personas, journey mapping |
-| [email-systems](email-systems/) | Transactional email, marketing automation, deliverability |
-
-### Workflow Automation
-
-| Skill | Description |
-|-------|-------------|
-| [n8n-workflows](n8n-workflows/) | Manage n8n automations via MCP tools |
-| [zapier-workflows](zapier-workflows/) | Orchestrate Zapier automations via MCP tools and webhooks |
-| [jira](jira/) | Jira issue management, sprint status, workflow automation |
-| [monitor](monitor/) | Metric watchers with alerts: URLs, shell commands, response times |
-| [loop](loop/) | Run commands on a recurring interval |
-| [schedule](schedule/) | Scheduled remote agents on cron |
-
-### Platform-Specific
-
-| Skill | Description |
-|-------|-------------|
-| [wordpress-development](wordpress-development/) | Block themes, plugins, REST API, Site Editor, wp.org compliance |
-
-### Skill Management
-
-| Skill | Description |
-|-------|-------------|
-| [skill-detectors](plugins/skill-detectors/) | (Now a plugin in the `unatt` marketplace — install via `/plugin install skill-detectors@unatt`.) Surfaces context-conditional skills automatically at session start and on every prompt. See [Skill detectors](#skill-detectors) above. |
-| [skill-enhance](skill-enhance/) | Propagate a technology across your skill library |
-| [skill-development](skill-development/) | Full skill lifecycle: search, creation, testing, improvement |
-| [find-skills](find-skills/) | Discover and install skills from the ecosystem |
-
-
-## How Skills Work
-
-A skill is a markdown file at `~/.claude/skills/<name>/SKILL.md`. Claude Code loads skill metadata at startup and loads the full content when relevant.
-
-**Triggering**: Type `/<skill-name>` in Claude Code, or Claude auto-loads the skill when your request matches its description.
-
-**Writing skills**: See [Anthropic's skill authoring docs](https://docs.anthropic.com/en/docs/claude-code/skills). Use `/skill-enhance` to propagate new technologies across existing skills.
+Skills get namespaced slash commands like `/frontend:senior-frontend`, `/wordpress:wordpress-development`. Triggered by typing the slash command, or auto-loaded when the skill's `description` matches the user's request.
 
 ## Recent Changes
 
-- **Curation pass 1.** Dropped 15 flat skills (specialist ML/CV/audio, niche platforms, WSL-irrelevant Windows-specific, and consolidated overlaps: `prompt-engineer` → `senior-prompt-engineer`, `linux-production-shell-scripts` → `bash-linux`, `skill-factory` → `skill-development`, `frontend-guidelines` → `senior-frontend`). Beefed up `wordpress-development` with Block Bindings API, Pattern Overrides, Section Styles, Interactivity API store, `register_rest_field`, `%i` SQL placeholder, Action Scheduler, `wp-env`, and `wp-scripts` internals.
-- **Converted to a Claude Code plugin marketplace** (`unatt`). Added `.claude-plugin/marketplace.json` and two initial plugins: `skill-detectors` (the framework) and `catalog` (auto-regenerated skill index). Legacy flat skills coexist at the repo root pending further curation.
-- Added `skill-detectors` framework as the first plugin: session-start hook surfaces disk-state signals, prompt-submit hook surfaces chat-mention candidates. See [Skill detectors](#skill-detectors).
-- Added Temporal (durable execution) guidance to agent-development, advanced-agents, senior-devops, senior-data-engineer, and backend-development skills
-- Pretext-layout text verification integrated across frontend skills
+- **Phase 2 — flat-to-plugin restructure.** Moved all 60 surviving flat skills into 13 concern-based plugins (`workflow`, `frontend`, `backend`, `devops`, `claude-stack`, `ai-agents`, `ai-ml`, `review`, `content`, `business`, `automation`, `wordpress`, `skill-management`). Marketplace now lists 15 plugins total (with `skill-detectors` + `catalog`). Catalog auto-regenerates on every push.
+- **Curation pass 1.** Dropped 15 flat skills (specialist ML/CV/audio, niche platforms, WSL-irrelevant Windows-specific, and consolidated overlaps). Beefed up `wordpress-development` with Block Bindings API, Pattern Overrides, Section Styles, Interactivity API store, `register_rest_field`, `%i` SQL placeholder, Action Scheduler, `wp-env`, and `wp-scripts` internals.
+- **Converted to a Claude Code plugin marketplace** (`unatt`). Added `.claude-plugin/marketplace.json` and initial plugins. First-class Claude Code support, auto-updates via commit-SHA versioning.
 
 ## License
 

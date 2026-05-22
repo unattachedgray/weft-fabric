@@ -1,0 +1,8 @@
+{
+  "name": "devops",
+  "description": "CI/CD, containerization, deployment, GitHub workflow automation, shell scripting. Includes Docker (multi-stage builds, hardening, Compose), Vercel + Next.js deployment, and Bash/Linux terminal patterns.",
+  "author": {
+    "name": "unattachedgray",
+    "url": "https://github.com/unattachedgray"
+  }
+}

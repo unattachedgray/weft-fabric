@@ -1,0 +1,8 @@
+{
+  "name": "content",
+  "description": "Content + document tools: PDF manipulation (extract, create, merge, forms), document-grounded analysis on local files (notebook, NotebookLM-style FTS5+MCP) or Google NotebookLM (browser-driven), and meme generation via memegen.link.",
+  "author": {
+    "name": "unattachedgray",
+    "url": "https://github.com/unattachedgray"
+  }
+}

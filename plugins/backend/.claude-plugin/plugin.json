@@ -1,0 +1,8 @@
+{
+  "name": "backend",
+  "description": "Backend / fullstack: Node.js/Express/TypeScript microservices, system architecture and tech-decision frameworks, schema design, third-party API integration, type-level TypeScript, JavaScript fundamentals, Bun runtime.",
+  "author": {
+    "name": "unattachedgray",
+    "url": "https://github.com/unattachedgray"
+  }
+}

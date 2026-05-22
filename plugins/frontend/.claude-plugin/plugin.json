@@ -1,0 +1,8 @@
+{
+  "name": "frontend",
+  "description": "Frontend stack: React + Next.js, TypeScript-based component patterns, Tailwind v4, design systems / UI design tokens, mobile-first design, browser automation, theme application, accessibility/WIG compliance, and text-aware layout via pretext.",
+  "author": {
+    "name": "unattachedgray",
+    "url": "https://github.com/unattachedgray"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "ai-ml",
+  "description": "Data science (statistical modeling, experimentation, causal inference), data engineering (pipelines, ETL/ELT, Spark/Airflow/dbt), and LangChain for LLM-powered apps with agents/RAG/tool calling.",
+  "author": {
+    "name": "unattachedgray",
+    "url": "https://github.com/unattachedgray"
+  }
+}

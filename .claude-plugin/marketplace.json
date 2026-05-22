@@ -17,7 +17,72 @@
     {
       "name": "catalog",
       "source": "./plugins/catalog",
-      "description": "Index of every skill available in this marketplace. Install on every machine — even machines that don't have all plugins installed will know what's available, so Claude can suggest installing on demand."
+      "description": "Index of every skill available in this marketplace. Install on every machine \u2014 even machines that don't have all plugins installed will know what's available, so Claude can suggest installing on demand."
+    },
+    {
+      "name": "workflow",
+      "source": "./plugins/workflow",
+      "description": "Project-agnostic workflow skills: structured development lifecycle, PRD-driven autonomous builds, eval testing, persona switching, multi-step planning, brainstorming, and full-stack app orchestration from natural-language input."
+    },
+    {
+      "name": "frontend",
+      "source": "./plugins/frontend",
+      "description": "Frontend stack: React + Next.js, TypeScript-based component patterns, Tailwind v4, design systems / UI design tokens, mobile-first design, browser automation, theme application, accessibility/WIG compliance, and text-aware layout via pretext."
+    },
+    {
+      "name": "backend",
+      "source": "./plugins/backend",
+      "description": "Backend / fullstack: Node.js/Express/TypeScript microservices, system architecture and tech-decision frameworks, schema design, third-party API integration, type-level TypeScript, JavaScript fundamentals, Bun runtime."
+    },
+    {
+      "name": "devops",
+      "source": "./plugins/devops",
+      "description": "CI/CD, containerization, deployment, GitHub workflow automation, shell scripting. Includes Docker (multi-stage builds, hardening, Compose), Vercel + Next.js deployment, and Bash/Linux terminal patterns."
+    },
+    {
+      "name": "claude-stack",
+      "source": "./plugins/claude-stack",
+      "description": "Anthropic ecosystem: Claude API / Agent SDK app development (with prompt caching), MCP server building, Gemini CLI for large-context review, and advanced LLM prompt engineering patterns."
+    },
+    {
+      "name": "ai-agents",
+      "source": "./plugins/ai-agents",
+      "description": "Building autonomous AI agents: architecture, tool integration, persistent memory systems, multi-agent orchestration / computer-use patterns, local CLI agent management, and refactoring bloated AGENTS.md/CLAUDE.md instruction files."
+    },
+    {
+      "name": "ai-ml",
+      "source": "./plugins/ai-ml",
+      "description": "Data science (statistical modeling, experimentation, causal inference), data engineering (pipelines, ETL/ELT, Spark/Airflow/dbt), and LangChain for LLM-powered apps with agents/RAG/tool calling."
+    },
+    {
+      "name": "review",
+      "source": "./plugins/review",
+      "description": "Code review and security: code quality (refactoring, coding standards, smells), security review (auth, input validation, secrets, vulnerabilities, deployment checklist), security audit (secrets, permissions, ports, DB integrity)."
+    },
+    {
+      "name": "content",
+      "source": "./plugins/content",
+      "description": "Content + document tools: PDF manipulation (extract, create, merge, forms), document-grounded analysis on local files (notebook, NotebookLM-style FTS5+MCP) or Google NotebookLM (browser-driven), and meme generation via memegen.link."
+    },
+    {
+      "name": "business",
+      "source": "./plugins/business",
+      "description": "Business / go-to-market: CEO advisory and strategy, marketing ideas (140 SaaS marketing approaches), App Store Optimization, UX research (interviews, personas, journey mapping), email systems (deliverability, automation, transactional)."
+    },
+    {
+      "name": "automation",
+      "source": "./plugins/automation",
+      "description": "Cross-tool workflow automation: Jira issue/sprint/backlog management, configurable metric watchers with alerts (URLs, shell commands, latency), and Zapier orchestration via MCP + webhooks."
+    },
+    {
+      "name": "wordpress",
+      "source": "./plugins/wordpress",
+      "description": "Comprehensive WordPress development: block themes + Site Editor, custom blocks (apiVersion 3, Block Bindings, Pattern Overrides, Section Styles), plugin architecture, REST API with schema, Interactivity API (store/state), performance, security, accessibility (WCAG 2.2 AA), wp.org compliance, wp-env + wp-scripts."
+    },
+    {
+      "name": "skill-management",
+      "source": "./plugins/skill-management",
+      "description": "Discover, create, and propagate Claude Code skills: find-skills (search/install from ecosystem), skill-development (full TDD lifecycle), skill-enhance (propagate a tech across your library)."
     }
   ]
 }

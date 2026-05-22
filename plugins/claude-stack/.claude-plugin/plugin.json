@@ -1,0 +1,8 @@
+{
+  "name": "claude-stack",
+  "description": "Anthropic ecosystem: Claude API / Agent SDK app development (with prompt caching), MCP server building, Gemini CLI for large-context review, and advanced LLM prompt engineering patterns.",
+  "author": {
+    "name": "unattachedgray",
+    "url": "https://github.com/unattachedgray"
+  }
+}

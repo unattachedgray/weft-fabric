@@ -1,0 +1,8 @@
+{
+  "name": "automation",
+  "description": "Cross-tool workflow automation: Jira issue/sprint/backlog management, configurable metric watchers with alerts (URLs, shell commands, latency), and Zapier orchestration via MCP + webhooks.",
+  "author": {
+    "name": "unattachedgray",
+    "url": "https://github.com/unattachedgray"
+  }
+}

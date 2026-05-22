@@ -1,0 +1,8 @@
+{
+  "name": "review",
+  "description": "Code review and security: code quality (refactoring, coding standards, smells), security review (auth, input validation, secrets, vulnerabilities, deployment checklist), security audit (secrets, permissions, ports, DB integrity).",
+  "author": {
+    "name": "unattachedgray",
+    "url": "https://github.com/unattachedgray"
+  }
+}

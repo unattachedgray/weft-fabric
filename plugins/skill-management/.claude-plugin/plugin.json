@@ -1,0 +1,8 @@
+{
+  "name": "skill-management",
+  "description": "Discover, create, and propagate Claude Code skills: find-skills (search/install from ecosystem), skill-development (full TDD lifecycle), skill-enhance (propagate a tech across your library).",
+  "author": {
+    "name": "unattachedgray",
+    "url": "https://github.com/unattachedgray"
+  }
+}
