@@ -32,7 +32,7 @@
     {
       "name": "backend",
       "source": "./plugins/backend",
-      "description": "Backend / fullstack: Node.js/Express/TypeScript microservices, system architecture and tech-decision frameworks, schema design, third-party API integration, type-level TypeScript, JavaScript fundamentals, Bun runtime."
+      "description": "Backend: Node.js/Express/TypeScript microservices with layered architecture, schema design, third-party API integration, type-level TypeScript, JavaScript fundamentals, Bun runtime."
     },
     {
       "name": "devops",
@@ -42,7 +42,7 @@
     {
       "name": "claude-stack",
       "source": "./plugins/claude-stack",
-      "description": "Anthropic ecosystem + cross-model tools: Claude API / Agent SDK app development (with prompt caching), MCP server building, Gemini CLI for large-context review, parallel Gemini + Codex cross-validation (multi-ai-review), bundled monthly-refreshed LLM API pricing reference (llm-api-pricing), and advanced LLM prompt engineering patterns."
+      "description": "Anthropic ecosystem + cross-model tools: Claude API / Agent SDK app development (with prompt caching), MCP server building, Gemini CLI for large-context review, parallel Gemini + Codex cross-validation (multi-ai-review), and a bundled monthly-refreshed LLM API pricing reference (llm-api-pricing)."
     },
     {
       "name": "ai-agents",
@@ -52,7 +52,7 @@
     {
       "name": "ai-ml",
       "source": "./plugins/ai-ml",
-      "description": "Data science (statistical modeling, experimentation, causal inference), data engineering (pipelines, ETL/ELT, Spark/Airflow/dbt), and LangChain for LLM-powered apps with agents/RAG/tool calling."
+      "description": "LangChain for LLM-powered apps: agents, chains, RAG, 500+ integrations across providers (OpenAI/Anthropic/Google), tool calling, memory management, vector stores."
     },
     {
       "name": "review",

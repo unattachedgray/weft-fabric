@@ -1,6 +1,6 @@
 {
   "name": "claude-stack",
-  "description": "Anthropic ecosystem + cross-model tools: Claude API / Agent SDK app development (with prompt caching), MCP server building, Gemini CLI for large-context review, parallel Gemini + Codex cross-validation (multi-ai-review), bundled monthly-refreshed LLM API pricing reference (llm-api-pricing), and advanced LLM prompt engineering patterns.",
+  "description": "Anthropic ecosystem + cross-model tools: Claude API / Agent SDK app development (with prompt caching), MCP server building, Gemini CLI for large-context review, parallel Gemini + Codex cross-validation (multi-ai-review), and a bundled monthly-refreshed LLM API pricing reference (llm-api-pricing).",
   "author": {
     "name": "unattachedgray",
     "url": "https://github.com/unattachedgray"
