@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Keep ~/.claude/skills cross-CLI valid (Claude Code / Codex / Gemini-agy / …).
+# On commit: auto-fix simple SKILL.md format problems (missing frontmatter,
+# non-slug name, over-long description) and re-stage them; reject ONLY what it
+# can't auto-fix (e.g. an empty file).
+#
+# Activate once per clone:  git config core.hooksPath hooks
+set -euo pipefail
+root="$(git rev-parse --show-toplevel)"
+mapfile -t files < <(git diff --cached --name-only --diff-filter=ACM | grep -E '(^|/)SKILL\.md$' || true)
+[ "${#files[@]}" -eq 0 ] && exit 0
+
+if python3 "$root/validate-skills.py" --fix "${files[@]}"; then
+  git add -- "${files[@]}"          # re-stage any auto-fixes so they land in this commit
+  exit 0
+fi
+echo "✗ commit blocked: the SKILL.md problem(s) above could not be auto-fixed — fix by hand." >&2
+exit 1

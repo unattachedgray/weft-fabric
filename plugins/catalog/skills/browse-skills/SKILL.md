@@ -96,14 +96,18 @@ Anthropic ecosystem + cross-model tools: Claude API / Agent SDK app development 
 
 ### `content`
 
-Content + document tools: PDF manipulation (extract, create, merge, forms), document-grounded analysis on local files (notebook, NotebookLM-style FTS5+MCP) or Google NotebookLM (browser-driven), and meme generation via memegen.link.
+Content + document tools: Office documents (docx/pptx/xlsx create+edit), PDF manipulation (extract, create, merge, forms) and structural page-ops (pdf-ops: merge/split/rotate/stamp), document-grounded analysis on local files (notebook, NotebookLM-style FTS5+MCP) or Google NotebookLM (browser-driven), and meme generation via memegen.link.
 
 | Skill | Description |
 |---|---|
+| `/content:docx` | Use this skill whenever the user wants to create, read, edit, or manipulate Word documents (.docx files). Triggers include: any mention of 'Word doc', 'word document', '.docx', or requests to produce professional documents with formattin... |
 | `/content:meme-factory` | Generate memes using the memegen.link API. Use when users request memes, want to add humor to content, or need visual aids for social media. Supports 100+ popular templates with custom text and styling. |
 | `/content:notebook` | (no description) |
 | `/content:notebooklm` | Use this skill to query your Google NotebookLM notebooks directly from Claude Code for source-grounded, citation-backed answers from Gemini. Browser automation, library management, persistent auth. Drastically reduced hallucinations thro... |
 | `/content:pdf` | Comprehensive PDF manipulation toolkit for extracting text and tables, creating new PDFs, merging/splitting documents, and handling forms. When Claude needs to fill in a PDF form or programmatically process, generate, or analyze PDF docu... |
+| `/content:pdf-ops` | Reorder, merge, split, rotate, and stamp PDF pages. |
+| `/content:pptx` | Use this skill any time a .pptx file is involved in any way — as input, output, or both. This includes: creating slide decks, pitch decks, or presentations; reading, parsing, or extracting text from any .pptx file (even if the extracted ... |
+| `/content:xlsx` | Use this skill any time a spreadsheet file is the primary input or output. This means any task where the user wants to: open, read, edit, or fix an existing .xlsx, .xlsm, .csv, or .tsv file (e.g., adding columns, computing formulas, form... |
 
 ### `devops`
 
