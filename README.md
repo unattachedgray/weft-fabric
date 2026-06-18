@@ -59,6 +59,10 @@ Plugins use commit-SHA versioning — every push to this repo bumps the version 
 
 For the live skill-by-skill catalog, install `catalog@unatt` and read `/catalog:browse-skills` — it's regenerated on every push.
 
+## Cross-agent principles
+
+[`principles/agent-principles.md`](principles/agent-principles.md) is one **agent-neutral** set of operating principles — iterate-independently, simplicity + surgical, verify-don't-claim, and the flywheel lens — shared across **Claude Code, Codex, and Antigravity**. [`scripts/deploy-principles.sh`](scripts/deploy-principles.sh) wires it into each agent's global instruction path (Codex `~/.codex/AGENTS.md` and Antigravity `~/.gemini/AGENTS.md` as symlinks to the one file they read natively; Claude Code already carries the full set in `~/.claude/CLAUDE.md`) and deploys the portable [`flywheel-audit`](principles/skills/flywheel-audit/) skill to each agent's skills dir. One source of truth, every agent. Run it (or `--uninstall`) once per machine; symlinks keep every agent on the latest after a `git pull`.
+
 ## Skill detectors
 
 The `skill-detectors` plugin addresses the *forgetting problem*: you install a categorically-better tool, you know it exists, and you still reach for the default every time because habit fires faster than memory. Two hooks invert that:
