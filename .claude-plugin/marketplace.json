@@ -83,6 +83,11 @@
       "name": "skill-management",
       "source": "./plugins/skill-management",
       "description": "Discover, create, and propagate Claude Code skills: find-skills (search/install from ecosystem), skill-development (full TDD lifecycle), skill-enhance (propagate a tech across your library)."
+    },
+    {
+      "name": "engineering",
+      "source": "./plugins/engineering",
+      "description": "Engineering discipline curated from Matt Pocock's skills: deep-module design (codebase-design + design-it-twice), test-driven development, domain modeling with a ubiquitous-language glossary + ADRs, hard-bug diagnosis, throwaway prototyping, architecture-deepening reports, issue triage, and PRD/issue authoring — plus relentless grilling sessions, teaching, and conversation handoff. Small, composable, philosophy-first; TypeScript examples throughout."
     }
   ]
 }

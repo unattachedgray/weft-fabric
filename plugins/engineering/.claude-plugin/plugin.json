@@ -1,0 +1,8 @@
+{
+  "name": "engineering",
+  "description": "Engineering discipline (curated from Matt Pocock's skills): deep-module design (codebase-design), test-driven development, domain modeling with a ubiquitous-language glossary + ADRs, hard-bug diagnosis, throwaway prototyping, issue triage, and PRD/issue authoring. Plus relentless grilling sessions and conversation handoff. Small, composable, philosophy-first.",
+  "author": {
+    "name": "unattachedgray",
+    "url": "https://github.com/unattachedgray"
+  }
+}
