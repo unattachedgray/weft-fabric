@@ -16,6 +16,29 @@ git clone https://github.com/unattachedgray/claude-skills ~/dev/claude-skills \
 Re-run `bootstrap.sh` any time to pull the latest and re-sync. Skills that depend on a specific
 agent/tool simply stay inert until that tool is installed — safe to share and carry everywhere.
 
+### Consolidating a machine that already has its own principles
+
+`bootstrap.sh` / `deploy-principles.sh` are **non-destructive** — they add the `@import` line at the
+top of `~/.claude/CLAUDE.md` and never delete what's already there. A machine with its own
+hand-written principles keeps them: the shared core (imported) first, its local content below. This
+is **not** meant to overwrite any machine's principles — it layers on top, then you reconcile.
+
+To fold that machine's principles into the single source of truth:
+
+1. **See what's local** — everything below the import line is that machine's own content:
+   ```
+   awk 'f; /^@.*AGENTS\.md/{f=1}' ~/.claude/CLAUDE.md
+   ```
+2. **Decide per item** (let Claude do the semantic reconcile — open both files and ask:
+   *"reconcile my local CLAUDE.md principles with AGENTS.md — which are universal, which are
+   machine-specific, which are duplicates?"*):
+   - **Universal & missing from the core** → promote it *up* into `principles/AGENTS.md`, then
+     `bash scripts/release.sh "principles: add <x>"` so every machine gets it on next session.
+   - **Genuinely machine-specific** (local paths, this box's quirks) → leave it below the import.
+   - **Already in the core** (duplicate) → delete the local copy.
+
+Nothing is overwritten; *you* choose what graduates to the shared core versus stays machine-local.
+
 ## Install (skills only)
 
 Add the marketplace once per machine:

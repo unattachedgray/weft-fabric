@@ -51,7 +51,10 @@ elif [ -f "$CC" ]; then
   # Existing CLAUDE.md without the import: prepend ONLY the import line (imports resolve from
   # anywhere). Don't add another header/marker — that accretes on repeated install runs.
   tmp="$(mktemp)"; { printf '%s\n\n' "$IMPORT"; cat "$CC"; } > "$tmp"; mv "$tmp" "$CC"
-  echo "  added @import to existing $CC  (review: strip any old inline principles below)"
+  echo "  added @import atop existing $CC — nothing deleted."
+  echo "    This machine had its own principles; CONSOLIDATE them with the shared core"
+  echo "    (promote universal ones up into AGENTS.md, keep machine-specific below, drop dups)."
+  echo "    See README → 'Consolidating a machine that already has its own principles'."
 else
   # No CLAUDE.md yet: create the thin scaffold.
   printf '# CLAUDE.md — machine-local (imports the shared core; add machine-specific notes below)\n\n%s\n\n<!-- machine-local additions below are never synced -->\n' "$IMPORT" > "$CC"
