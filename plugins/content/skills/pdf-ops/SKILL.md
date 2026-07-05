@@ -62,7 +62,7 @@ choose the output path.
    current rotations.
 2. Run the verb. Page numbers are **1-based** and match what the user sees.
 3. Read the printed output path and include it in your reply (e.g. "Saved →
-   `/home/julian/.hermes/weft/pdf/20260528-...-merge-report.pdf`"). The chat turns
+   `~/.hermes/weft/pdf/20260528-...-merge-report.pdf`"). The chat turns
    that path into a card with an "Open in editor" button.
 4. Chain ops by feeding one command's output path into the next.
 

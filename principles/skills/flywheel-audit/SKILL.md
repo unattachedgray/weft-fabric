@@ -7,7 +7,7 @@ description: Decide whether/how to adopt a new tool, library, idea, or pattern. 
 
 Run this before you **adopt, absorb, or build on** any new tool, library, idea, or pattern.
 Decide *flywheel-first* — does it compound, or is it just a tool — and let the answer shape
-*how* you wire it in. (Background: `agent-principles.md` → The flywheel lens.)
+*how* you wire it in. (Background: `AGENTS.md` → The flywheel lens.)
 
 ## Step 1 — Is there a flywheel angle? Ask all three
 - **(a) Does it already HAVE a compounding loop?** Each use makes the next better.

@@ -2,7 +2,21 @@
 
 A [Claude Code](https://docs.anthropic.com/en/docs/claude-code/skills) **plugin marketplace** (`unatt`) — curated skills for development, AI/ML, content, business, and ops, plus a meta-skill framework (`skill-detectors`) that surfaces context-conditional skills automatically.
 
-## Install
+## Fresh machine (one command)
+
+The repo is public, so no auth is needed. Clone it, then run `bootstrap.sh` — it syncs the shared
+[operating principles](#cross-agent-principles) into every agent CLI **and** registers this skills
+marketplace so you can install skills on demand:
+
+```
+git clone https://github.com/unattachedgray/claude-skills ~/dev/claude-skills \
+  && ~/dev/claude-skills/bootstrap.sh
+```
+
+Re-run `bootstrap.sh` any time to pull the latest and re-sync. Skills that depend on a specific
+agent/tool simply stay inert until that tool is installed — safe to share and carry everywhere.
+
+## Install (skills only)
 
 Add the marketplace once per machine:
 
@@ -61,7 +75,7 @@ For the live skill-by-skill catalog, install `catalog@unatt` and read `/catalog:
 
 ## Cross-agent principles
 
-[`principles/agent-principles.md`](principles/agent-principles.md) is one **agent-neutral** set of operating principles — iterate-independently, simplicity + surgical, verify-don't-claim, and the flywheel lens — shared across **Claude Code, Codex, and Antigravity**. [`scripts/deploy-principles.sh`](scripts/deploy-principles.sh) wires it into each agent's global instruction path (Codex `~/.codex/AGENTS.md` and Antigravity `~/.gemini/AGENTS.md` as symlinks to the one file they read natively; Claude Code already carries the full set in `~/.claude/CLAUDE.md`) and deploys the portable [`flywheel-audit`](principles/skills/flywheel-audit/) skill to each agent's skills dir. One source of truth, every agent. Run it (or `--uninstall`) once per machine; symlinks keep every agent on the latest after a `git pull`.
+[`principles/AGENTS.md`](principles/AGENTS.md) is the **agent-neutral** single source of truth for operating principles — think-before-coding, the simplicity ladder + surgical edits, goal-driven verification, iterate-independently, and the full flywheel lens — shared across **Claude Code, Codex, and Antigravity**. [`scripts/deploy-principles.sh`](scripts/deploy-principles.sh) wires it into each agent's global instruction path (Codex `~/.codex/AGENTS.md` and Antigravity `~/.gemini/AGENTS.md` as symlinks to the one file they read natively; Claude Code via an absolute-path `@import` written into `~/.claude/CLAUDE.md`, leaving each machine's local notes below the import untouched) and deploys the portable [`flywheel-audit`](principles/skills/flywheel-audit/) skill to each agent's skills dir. One source of truth, every agent. Run it (or `--uninstall`) once per machine; the symlinks + import keep every agent on the latest after a `git pull`.
 
 ## Skill detectors
 

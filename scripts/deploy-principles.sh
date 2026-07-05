@@ -6,14 +6,14 @@
 #   deploy-principles.sh              install
 #   deploy-principles.sh --uninstall  remove only the symlinks this script created
 #
-# Single source of truth: principles/agent-principles.md in this repo.
+# Single source of truth: principles/AGENTS.md in this repo.
 # Why per-agent glue: Codex can't @import (reads ~/.codex/AGENTS.md as a real file → symlink);
-# Antigravity reads ~/.gemini/AGENTS.md natively (v1.20.3+); Claude Code already carries the full
-# principles in ~/.claude/CLAUDE.md (to also pin the shared core, add an absolute-path @import —
-# never the @~/ form, which silently fails: anthropics/claude-code#8765).
+# Antigravity reads ~/.gemini/AGENTS.md natively (v1.20.3+); Claude Code pins the shared core with
+# an absolute-path @import written into ~/.claude/CLAUDE.md (never the @~/ form, which silently
+# fails: anthropics/claude-code#8765) — machine-local notes live below the import, untouched.
 set -euo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-CANON="$REPO/principles/agent-principles.md"
+CANON="$REPO/principles/AGENTS.md"
 SKILLS_SRC="$REPO/principles/skills"
 
 link() { ln -sfn "$1" "$2"; echo "  $2 -> $1"; }
@@ -27,16 +27,36 @@ if [ "${1:-}" = "--uninstall" ]; then
       l="$d/$(basename "$sk")"; [ -L "$l" ] && rm -v "$l" || true
     done
   done
+  CC="$HOME/.claude/CLAUDE.md"; IMPORT="@$CANON"
+  if [ -f "$CC" ] && grep -qxF "$IMPORT" "$CC"; then
+    tmp="$(mktemp)"; grep -vxF "$IMPORT" "$CC" > "$tmp"; mv "$tmp" "$CC"
+    echo "  removed @import from $CC (machine-local content kept)"
+  fi
   echo "uninstalled."; exit 0
 fi
 
 [ -f "$CANON" ] || { echo "canonical principles file missing: $CANON" >&2; exit 1; }
 
 echo "principles -> agent global-instruction files:"
-mkdir -p "$HOME/.codex" "$HOME/.gemini"
+mkdir -p "$HOME/.codex" "$HOME/.gemini" "$HOME/.claude"
 link "$CANON" "$HOME/.codex/AGENTS.md"    # Codex (native, no @import)
 link "$CANON" "$HOME/.gemini/AGENTS.md"   # Antigravity (native AGENTS.md)
-echo "  Claude Code: already carries the full principles via ~/.claude/CLAUDE.md (no action needed)."
+
+# Claude Code: @import the shared core (absolute path; @~/ silently fails, #8765). Idempotent —
+# add the import once, at the top, preserving any machine-local content already in CLAUDE.md.
+CC="$HOME/.claude/CLAUDE.md"; IMPORT="@$CANON"
+if [ -f "$CC" ] && grep -qxF "$IMPORT" "$CC"; then
+  echo "  $CC already imports the shared core."
+elif [ -f "$CC" ]; then
+  # Existing CLAUDE.md without the import: prepend ONLY the import line (imports resolve from
+  # anywhere). Don't add another header/marker — that accretes on repeated install runs.
+  tmp="$(mktemp)"; { printf '%s\n\n' "$IMPORT"; cat "$CC"; } > "$tmp"; mv "$tmp" "$CC"
+  echo "  added @import to existing $CC  (review: strip any old inline principles below)"
+else
+  # No CLAUDE.md yet: create the thin scaffold.
+  printf '# CLAUDE.md — machine-local (imports the shared core; add machine-specific notes below)\n\n%s\n\n<!-- machine-local additions below are never synced -->\n' "$IMPORT" > "$CC"
+  echo "  created $CC -> $IMPORT"
+fi
 
 echo "portable skills -> codex + antigravity skills dirs (Claude already has them):"
 for d in "$HOME/.codex/skills" "$HOME/.gemini/config/skills"; do
