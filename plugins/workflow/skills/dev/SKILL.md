@@ -1,3 +1,8 @@
+---
+name: dev
+description: Structured 7-phase development lifecycle (THINK→PLAN→BUILD→REVIEW→TEST→SHIP→REFLECT) with modes new/fix/refactor/debug plus a serious mode (adversarial review panel + Definition-of-Done gate) for high-blast-radius work. User-invoked via /dev.
+disable-model-invocation: true
+---
 # /dev — Structured development lifecycle
 
 Seven-phase development process inspired by Garry Tan's gstack methodology, adapted for Claude Code with task persistence. Each phase has a distinct role and output that feeds the next.
@@ -15,6 +20,7 @@ $ARGUMENTS — `<mode> <description>`
 | `fix <bug description>` | Fixing a specific bug | Think=Investigate, Plan=Hypothesis, Build=Minimal fix |
 | `refactor <area>` | Restructuring without behavior change | Think=Understand current, Plan=Design target, Test=Verify equivalence |
 | `debug <symptom>` | Investigating unknown issues | Think=Reproduce+Isolate, Plan=Root cause, Build=Fix |
+| `serious [mode] <desc>` | High-blast-radius work: auth, migrations, shared libs, security/payment paths, anything hard to roll back | All gates on; adversarial VERIFY panel; mandatory security stage; Definition-of-Done gate before SHIP. See **Serious Mode** below. |
 
 If no mode specified, infer from context. If ambiguous, ask.
 
@@ -267,6 +273,59 @@ Same as fix but Think phase is more exploratory. May loop back from Plan to Thin
 THINK(map current) ──[user confirms]──> PLAN(design target) ──[user confirms]──> BUILD ──> REVIEW ──> TEST(equivalence) ──> SHIP ──> REFLECT
 ```
 Extra confirmation gates because refactors have high blast radius.
+
+---
+
+## Serious Mode — `/dev serious [new|fix|refactor|debug] <description>`
+
+`serious` is a **rigor modifier**, not a new kind of work — stack it on any mode (defaults to `new`). Reach for it when **blast radius**, not diff size, is high: authentication, authorization, data migrations, payment/billing, shared libraries, anything you cannot cheaply roll back. It keeps all seven phases but hardens the back half: solo self-review is replaced by an adversarial **panel**, security becomes a gate rather than a hope, and SHIP is held behind a standing **Definition of Done**.
+
+What changes vs standard `/dev`:
+1. **Every gate is on** — THINK and PLAN always wait for confirmation, even in `fix`/`debug`.
+2. **REVIEW + TEST collapse into VERIFY (adversarial)** — a parallel panel, not a self-review.
+3. **Security is mandatory**, not an optional hat.
+4. **SHIP is gated on the Definition of Done** below.
+5. **Anti-rationalization** applies at every gate.
+
+### Anti-rationalization — the excuses that lose incidents
+| You're tempted to think… | Reality |
+|---|---|
+| "It's a small change, skip the panel" | The worst incidents are one-line changes to serious paths. Blast radius decides, not diff size. |
+| "I'll add the security check later" | Later never comes; the vuln ships. Security is a gate, not a follow-up. |
+| "Tests pass, so it's fine" | Passing tests prove the code matches the tests — not that the tests cover the risk. The panel checks the coverage itself. |
+| "I can roll it back if it breaks" | Only if the rollback is written down *first*. No rollback plan = not shippable. |
+
+### VERIFY (adversarial) — replaces solo REVIEW + TEST
+Do not review your own diff. Convene a **panel**: spawn these three in **one message** (parallel Agent calls), each handed the diff + the plan, each reporting **independently**:
+- **`agent-skills:code-reviewer`** — correctness, readability, architecture, edge cases.
+- **`agent-skills:security-auditor`** — the mandatory security stage: injection, authz, secret handling, unsafe deserialization, supply-chain/dependency risk.
+- **`agent-skills:test-engineer`** — coverage gaps: does a test go **red without the change and green with it**? What path is untested?
+
+For web-frontend work, also fan out **`agent-skills:web-performance-auditor`**. Personas never invoke other personas (depth ≤ 1) — they report to you; **you** synthesize.
+
+Emit a `## Verify` block with a verdict:
+- **GO** — no Must-Fix finding survives, and the Definition of Done is met.
+- **NO-GO** — one or more Must-Fix findings: list them, fix, and **re-run the panel on the changed diff**.
+- **Rollback plan** — state it every time, even on GO: the exact undo path (revert SHA, migration-down, feature-flag off). If you cannot name one, the verdict is **NO-GO**.
+
+### Definition of Done — SHIP is gated on ALL of these
+A standing floor; it cannot be renegotiated under deadline pressure. Solo-tuned (no PR/merge step).
+- [ ] **Runtime-verified** — exercised end-to-end in the real app and observed working, not merely compiled/type-checked (use `/verify` or `/run`).
+- [ ] **Tests fail-without / pass-with** — at least one test genuinely catches this change; you watched it go red then green.
+- [ ] **No regressions** — full build + test suite green.
+- [ ] **Panel GO** — VERIFY returned GO with no surviving Must-Fix.
+- [ ] **Security clean** — security-auditor found nothing Must-Fix (or findings fixed **and** re-checked).
+- [ ] **Rollback written** — the undo path is in the commit body.
+- [ ] **Docs current** — behavior/architecture changes reflected in `CLAUDE.md` / relevant docs.
+
+Any unchecked box → **not done**. Name the box that blocks and resolve it before committing.
+
+### Serious flow
+```
+THINK ─[gate]─> PLAN ─[gate]─> BUILD ─> VERIFY (panel: review ‖ security ‖ test) ─[GO]─> SHIP [DoD gate] ─> REFLECT
+                                              └────────────[NO-GO]───────────> fix ─> re-panel
+```
+Escalation is unchanged: 3 failed builds → back to PLAN; a disproven hypothesis → back to THINK.
 
 ## Guidelines
 
