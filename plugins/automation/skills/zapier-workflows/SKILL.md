@@ -1,5 +1,5 @@
 ---
-name: Zapier Workflows
+name: zapier-workflows
 description: Manage and orchestrate Zapier automations via MCP tools and webhook-triggered Zaps. Use when user mentions workflows, automations, running processes, research, data tracking, or specific Zapier actions. Handles both individual Zapier MCP tools and complex multi-step Zaps.
 version: 1.0.0
 ---

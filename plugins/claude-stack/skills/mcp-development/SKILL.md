@@ -1,5 +1,5 @@
 ---
-name: MCP Development
+name: mcp-development
 description: Build and integrate MCP servers for Claude Code. Use when creating MCP servers (Python/TypeScript), designing tools, configuring integrations, or setting up external service connections. Covers server development, tool design, testing, and deployment.
 version: 1.0.1
 ---

@@ -1,3 +1,8 @@
+---
+name: pretext-layout
+description: "Text-aware frontend design and verification. Use when building, reviewing, or testing ANY web frontend — applies @chenglou/pretext text-measurement principles to prevent text overflow, verify layout fit, and design container-aware typography. Text that doesn't fit its container is a bug."
+---
+
 # /pretext-layout — Text-aware frontend design and verification
 
 Use when building, reviewing, or testing ANY web frontend. Applies text measurement principles from [@chenglou/pretext](https://github.com/chenglou/pretext) to prevent text overflow, verify layout fit, and design container-aware typography. Text that doesn't fit its container is a bug.

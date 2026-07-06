@@ -1,3 +1,8 @@
+---
+name: notebook
+description: "Document-grounded analysis (NotebookLM-style). Use to answer questions over a folder of local documents with source citations — ingests them, indexes with FTS5, generates overviews, and synthesizes across documents. Good for grounded Q&A over a fixed document set."
+---
+
 # /notebook — Document-grounded analysis (NotebookLM-style)
 
 Point to a folder of documents. The system ingests them, indexes with FTS5, and becomes an expert on their contents — answering questions with source citations, generating overviews, and synthesizing across documents.

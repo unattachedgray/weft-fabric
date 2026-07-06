@@ -1,3 +1,8 @@
+---
+name: security-audit
+description: "Run a security audit of the system installation and report findings. Use when the user wants to audit their system/installation security posture (as opposed to reviewing code changes — that's security-review)."
+---
+
 # Security Audit
 
 Run a security audit of the system installation and report findings.

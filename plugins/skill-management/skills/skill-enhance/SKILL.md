@@ -1,3 +1,8 @@
+---
+name: skill-enhance
+description: "Propagate a technology across your skill library. Use when the user wants to weave a new capability, tool, or technology into all their existing skills — researches it, audits every installed skill for where it applies, and adds integration instructions to each applicable one."
+---
+
 # /skill-enhance — Propagate a technology across your skill library
 
 Research a technology, audit all installed skills for where it applies, and add integration instructions to each applicable skill. One command to weave a new capability into everything you already have.

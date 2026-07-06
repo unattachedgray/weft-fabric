@@ -1,3 +1,8 @@
+---
+name: monitor
+description: "Configurable metric watchers with alerts. Use when the user wants to watch a URL, metric, or command output over time — create monitors that periodically check URLs or run shell commands, extract values, evaluate conditions, and alert on Discord when something changes or crosses a threshold. Checks run during heartbeat cycles at zero LLM cost."
+---
+
 # /monitor — Configurable metric watchers with alerts
 
 Create monitors that periodically check URLs or run shell commands, extract values, evaluate conditions, and alert you on Discord when something changes or crosses a threshold. All checks run automatically during heartbeat cycles at zero LLM cost.

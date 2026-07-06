@@ -1,3 +1,8 @@
+---
+name: browser
+description: "Browser automation via a Chrome bridge extension. Use when a task means interacting with a website from Claude Code — tab management, screenshots, form filling, data extraction, device emulation, network capture (72 commands across 12 categories). Requires the browser bridge running plus the Chrome extension installed."
+---
+
 # /browser — Browser automation via Chrome browser extension
 
 Automate Chrome from Claude Code using the browser bridge extension. 72 commands across 12 categories: tab management, screenshots, form filling, data extraction, device emulation, network capture, and more.
