@@ -1,3 +1,8 @@
+---
+name: eval
+description: Run deterministic evaluations of skills against .evals/<skill>/*.eval.md cases (pattern-match grading, no LLM judge) to catch regressions. User-invoked via /eval.
+disable-model-invocation: true
+---
 # /eval — Run skill evaluations
 
 Test skills against predefined cases to catch regressions and verify quality.

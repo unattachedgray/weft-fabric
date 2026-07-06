@@ -2,7 +2,6 @@
 name: brainstorming
 description: "You MUST use this before any creative work - creating features, building components, adding functionality, or modifying behavior. Explores user intent, requirements and design before implementation."
 ---
-
 # Brainstorming Ideas Into Designs
 
 ## Overview
@@ -36,13 +35,13 @@ Start by understanding the current project context, then ask questions one at a 
 
 **Documentation:**
 - Write the validated design to `docs/plans/YYYY-MM-DD-<topic>-design.md`
-- Use elements-of-style:writing-clearly-and-concisely skill if available
+- Write clearly and concisely; run `stop-slop` on the prose if available
 - Commit the design document to git
 
 **Implementation (if continuing):**
 - Ask: "Ready to set up for implementation?"
-- Use superpowers:using-git-worktrees to create isolated workspace
-- Use superpowers:writing-plans to create detailed implementation plan
+- Create an isolated git worktree for the work (`git worktree add`, or the harness's worktree isolation)
+- Use the **`writing-plans`** skill to turn this design into a detailed implementation plan
 
 ## Key Principles
 

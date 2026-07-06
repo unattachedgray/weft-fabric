@@ -69,3 +69,5 @@
 | 6 | DevOps Engineer | ❌ | All code ready | Deployment ready |
 
 > 🔴 **CRITICAL:** Phase 1.5 is MANDATORY. No specialist agents proceed without PLAN.md verification.
+
+> **Phase 5 review agents** are the installed `agent-skills:security-auditor`, `agent-skills:test-engineer`, and `agent-skills:web-performance-auditor` (Performance Optimizer) — the **same panel `/dev serious` convenes**. Spawn them in one message (parallel) and synthesize a go/no-go. Don't invent separate reviewers; keep one review cast across the workflow.

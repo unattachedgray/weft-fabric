@@ -2,7 +2,6 @@
 name: writing-plans
 description: Use when you have a spec or requirements for a multi-step task, before touching code
 ---
-
 # Writing Plans
 
 ## Overview
@@ -33,7 +32,7 @@ Assume they are a skilled developer, but know almost nothing about our toolset o
 ```markdown
 # [Feature Name] Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **For Claude:** Implement this plan task-by-task — dispatch a fresh subagent per task (Agent tool) with review between tasks, or hand it to the `build` skill to execute story-by-story with quality gates.
 
 **Goal:** [One sentence describing what this builds]
 
@@ -100,17 +99,15 @@ After saving the plan, offer execution choice:
 
 **"Plan complete and saved to `docs/plans/<filename>.md`. Two execution options:**
 
-**1. Subagent-Driven (this session)** - I dispatch fresh subagent per task, review between tasks, fast iteration
+**1. Subagent-Driven (this session)** — dispatch a fresh subagent (Agent tool) per task, review between tasks, fast iteration
 
-**2. Parallel Session (separate)** - Open new session with executing-plans, batch execution with checkpoints
+**2. Autonomous (`build` skill)** — hand the plan to `build` to execute story-by-story with plan verification, fresh context per story, and per-story quality gates
 
 **Which approach?"**
 
 **If Subagent-Driven chosen:**
-- **REQUIRED SUB-SKILL:** Use superpowers:subagent-driven-development
 - Stay in this session
-- Fresh subagent per task + code review
+- Fresh subagent per task (Agent tool); review between tasks via the `/dev` REVIEW phase — or the `/dev serious` adversarial panel for high-blast-radius work
 
-**If Parallel Session chosen:**
-- Guide them to open new session in worktree
-- **REQUIRED SUB-SKILL:** New session uses superpowers:executing-plans
+**If Autonomous chosen:**
+- Hand the plan to the `build` skill — it parses stories, verifies the plan across 5 dimensions, and executes with per-story quality gates

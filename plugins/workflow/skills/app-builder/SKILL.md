@@ -3,7 +3,6 @@ name: app-builder
 description: Main application building orchestrator. Creates full-stack applications from natural language requests. Determines project type, selects tech stack, coordinates agents.
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash, Agent
 ---
-
 # App Builder - Application Building Orchestrator
 
 > Analyzes user's requests, determines tech stack, plans structure, and coordinates agents.
@@ -46,6 +45,8 @@ Quick-start scaffolding for new projects. **Read the matching template only!**
 
 ## 🔗 Related Agents
 
+**Builder agents** — app-builder-specific orchestration workers, dispatched via the Agent tool:
+
 | Agent | Role |
 |-------|------|
 | `project-planner` | Task breakdown, dependency graph |
@@ -53,6 +54,15 @@ Quick-start scaffolding for new projects. **Read the matching template only!**
 | `backend-specialist` | API, business logic |
 | `database-architect` | Schema, migrations |
 | `devops-engineer` | Deployment, preview |
+
+**Review agents** — the Phase-5 verification panel. Use the SAME installed agents the `/dev serious` panel uses, so the whole workflow shares one review cast:
+
+| Agent | Role |
+|-------|------|
+| `agent-skills:security-auditor` | Vulnerability / injection / authz / secrets audit |
+| `agent-skills:test-engineer` | Test coverage and gaps |
+| `agent-skills:web-performance-auditor` | Bundle size / Core Web Vitals |
+| `agent-skills:code-reviewer` | Correctness / architecture review |
 
 ---
 
@@ -77,11 +87,4 @@ App Builder Process:
 
 ## Layout Verification (Web Projects)
 
-After the app builds and a dev server is running, verify text layout using pretext-based measurement:
-
-1. **Quick health check**: `read_page` with `layoutCheck:true` on each key page
-2. **Interactive elements**: `verify_layout` — buttons (maxLines:1), cards (fitsContainer), nav links (fitsWidth)
-3. **Mobile check**: `emulate_device` preset "iphone16" + `verify_layout` on same elements
-4. **Resolve**: Fix any high-severity issues (text_multiline_overflow, label_overflow) before delivery
-
-See `/pretext-layout` for full CSS patterns, commands, and verification checklist.
+After the app builds and a dev server is running, run the **`/pretext-layout`** checks: a `layoutCheck` health pass on each key page, plus `verify_layout` on interactive elements (buttons, cards, nav) at both desktop and mobile viewports. Fix every high-severity issue before delivery. See `/pretext-layout` for the full commands, CSS patterns, and checklist.

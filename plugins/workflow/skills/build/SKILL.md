@@ -1,3 +1,8 @@
+---
+name: build
+description: Autonomous PRD-driven build loop — parses stories, verifies the plan across 5 dimensions, then executes story-by-story with fresh context and per-story quality gates. User-invoked via /build.
+disable-model-invocation: true
+---
 # /build — Autonomous build orchestration
 
 PRD-driven build loop with plan verification and quality gates. Combines ralph's fresh-context-per-story approach with GSD's structured plan verification.
@@ -58,7 +63,7 @@ After all stories complete:
 2. Full test suite: `npm test`
 3. Size audit: Check all modified files are within limits
 4. Doc check: Update DEVELOPMENT.md and CLAUDE.md if needed
-5. **Layout verification** (web frontend projects): Run `read_page` with `layoutCheck:true` on key pages — 0 high-severity issues required. Run `verify_layout` on interactive elements (buttons maxLines:1, cards fitsContainer). Test at mobile viewport via `emulate_device`. See `/pretext-layout`.
+5. **Layout verification** (web frontend projects): run the **`/pretext-layout`** checks — 0 high-severity layout issues required at desktop and mobile viewports.
 
 ## Phase 5: Report
 
