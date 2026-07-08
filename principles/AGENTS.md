@@ -71,6 +71,8 @@ For multi-step tasks, state a brief plan:
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
+**Verification duty doesn't delegate.** A subagent's "done" is a claim, not evidence — execute the proof on its artifact yourself; and if you can't write the command that proves a delegated task is done, the task isn't ready to delegate.
+
 ## 5. Iterate Independently — pass the gate before every manual ask
 
 **TRIGGER — this rule fires the moment you're about to ask the user to *do* something by hand:** rebuild, install, restart, click, paste, run a command, flip a setting, re-run an export, look something up.
@@ -108,6 +110,7 @@ There is a real bias toward quietly demoting the option that means more work for
 - **OQ gate:** for non-trivial features, the design doc carries an explicit **Open Questions** list. Each OQ gets discussed, decided, and marked closed. **Implementation does not start while an OQ is open.** The OQ count is the gate, not a vibe of "seems discussed enough."
 - **Decision ledger:** the moment a decision is confirmed in discussion, record it in the project's DECISIONS file (or CONTEXT.md): the decision, the why, and the rejected alternatives. Before touching that area again — especially in a later session — **check the ledger first; never re-derive a settled decision from keyword pattern-matching.** If a new instruction conflicts with the ledger, surface the conflict instead of silently complying. Requirement changes from the *human* side go in the same ledger with a date — half of "why is it like this?" is a quietly changed requirement, not a bad implementation.
 - **Early designs are hypotheses:** the first-session architecture dump is the moment of maximum persuasiveness and minimum evidence. Plausible reasoning is not verification. Label each load-bearing structural choice with its **revisit trigger** — the concrete signal that would mean it was wrong — and probe expensive-to-reverse choices with a cheap spike before locking them in.
+- **Checks are reviewable too:** when work fails a check but the work looks right, put the check on trial — a corrected check, logged in the ledger, is a valid outcome. A rule that survives unexamined gets gamed, not satisfied.
 
 ## 9. Escalate Structure Problems — Don't Diligently Patch
 
