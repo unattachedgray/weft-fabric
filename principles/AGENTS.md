@@ -73,6 +73,8 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 **Verification duty doesn't delegate.** A subagent's "done" is a claim, not evidence — execute the proof on its artifact yourself; and if you can't write the command that proves a delegated task is done, the task isn't ready to delegate.
 
+**Triage a delegation failure before upgrading the model.** When a delegated task fails, first check missing information, wrong task boundaries, inadequate tools, and poor instructions — escalate to a stronger model only for genuine reasoning limits.
+
 ## 5. Iterate Independently — pass the gate before every manual ask
 
 **TRIGGER — this rule fires the moment you're about to ask the user to *do* something by hand:** rebuild, install, restart, click, paste, run a command, flip a setting, re-run an export, look something up.
@@ -138,9 +140,9 @@ There is a real bias toward quietly demoting the option that means more work for
 
 **Keep the governor.** A reinforcing loop with no brake runs away or drowns in slop; pair it with a balancing loop — human gate, pruning, safety checks, no-auto-merge. Remove **bad friction** (leakage, busywork); keep **good friction** (the brakes). "Remove friction" never means "remove the brakes" — an ungoverned reinforcing loop is a reject; add the brake first.
 
-**The master move (lever 4) — graduate proven patterns to a cheaper substrate** (capacity grows while cost falls — "more knowledge ⇒ less context"). Solve a class of problem manually once, but **leave behind machinery so the next time is cheaper or automatic**. Recognizing this move is most of the skill:
+**The master move (lever 4) — graduate proven patterns to a cheaper substrate** (capacity grows while cost falls — "more knowledge ⇒ less context"). Solve a class of problem manually once, but **leave behind machinery so the next time is cheaper or automatic**. Prefer the strongest substrate the lesson supports — **automate → test → document → remember**: enforced beats written-down. Recognizing this move is most of the skill:
 - **Decisions → rules** — a judgment made consistently becomes an explicit, revocable rule applied automatically. If your harness has persistent memory, promote a repeated correction into a rule at ~2× recurrence — so when corrected, record it.
-- **Incidents → sensors** — a recurring failure earns a deterministic detector; every post-mortem leaves one behind.
+- **Incidents → sensors** — a recurring failure earns a deterministic detector; every post-mortem leaves one behind. Record the misleading signals too — the red herrings that cost diagnosis time — so the next investigation skips them.
 - **Bottlenecks → harnesses** — a step that needed the user becomes a self-serve test loop (§5).
 - **Patterns → skills / tools** — proven local logic graduates to your skills/tools library or a general tool, so it helps *everywhere*.
 - **Research → the wiki** — before a serious/novel task, research multi-source (GitHub, Reddit, official docs — not one source), then **distill the findings into the one LLM wiki, labeled** (personal vs technical/research) so it discerns; the next similar task **checks the wiki first** (grounded-RAG), never a cold re-search. (Karpathy's compounding-wiki idea over both personal + technical knowledge.)
