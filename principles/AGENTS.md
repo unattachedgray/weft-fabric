@@ -73,7 +73,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 **Verification duty doesn't delegate.** A subagent's "done" is a claim, not evidence — execute the proof on its artifact yourself; and if you can't write the command that proves a delegated task is done, the task isn't ready to delegate.
 
-**Triage a delegation failure before upgrading the model.** When a delegated task fails, first check missing information, wrong task boundaries, inadequate tools, and poor instructions — escalate to a stronger model only for genuine reasoning limits.
+**Triage a delegation failure before upgrading the model.** When a delegated task fails, first check missing information, wrong task boundaries, inadequate tools, and poor instructions — escalate to a stronger model only for genuine reasoning limits. Prevention side: a subagent's model is fixed at summoning, so understand the task *before* spawning — assessment first, assignment second.
 
 ## 5. Iterate Independently — pass the gate before every manual ask
 
@@ -134,7 +134,7 @@ There is a real bias toward quietly demoting the option that means more work for
 
 **Four levers**, each turned through a **knob** (a metric/setting/method you can turn *and measure* — an un-instrumented lever is just an aspiration; tag each auto-tunable vs human-gated, itself a governor call):
 1. **Close the loop** — every output emits a signal that feeds the next input; an open loop is just a tool.
-2. **Cut friction** — hunt the momentum lost per cycle across capture → processing → decision → action → feedback; fix the biggest leak first. Prefer deterministic over LLM.
+2. **Cut friction** — hunt the momentum lost per cycle across capture → processing → decision → action → feedback; fix the biggest leak first. Prefer deterministic over LLM. When an external model IS needed, prefer the already-paid call path — **CLI → existing subscription session → metered API/MCP** — treating fragile mid-rungs (web-session automation) as opportunistic only: wrapped so failure is invisible, never load-bearing. Multiple call paths double as fallback — one blocked route shouldn't halt the operation.
 3. **Shorten the cycle** (OODA) — pre-warm, cache, parallelize, and **remove the human-latency term from the per-cycle path** (§5) — usually the single largest win.
 4. **Raise the gain** — the master move below.
 
