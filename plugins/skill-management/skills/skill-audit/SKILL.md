@@ -12,6 +12,28 @@ paid as attention in every session, not as an error.
 This is the periodic pass that keeps the set honest. Run it every month or two,
 or whenever the repo has grown by a dozen skills.
 
+## Order of evidence
+
+Four rules, each of which was learned by getting it wrong on 2026-08-08. Apply
+them in this order; a later rule never overrides an earlier one.
+
+1. **Establish the reachable window before reading usage.** An invocation count
+   is meaningless for a skill nothing could invoke. Check when the marketplace
+   was registered and what was symlinked, then only count usage inside that
+   window.
+2. **Bundled files before line count.** A 400-line SKILL.md shipping working
+   scripts is a tool; a 400-line one shipping nothing is a tutorial. Length
+   alone flagged two skills carrying 17–25 KB of real Python.
+3. **"Redundant with a built-in" needs two checks, not one** — that it is
+   redundant on *every* CLI (see §2), and that the on-machine infrastructure
+   actually matches what the skill describes. One skill survived a prune on
+   cross-CLI grounds and was then retired for the better reason that it
+   documented a Chrome bridge on a port with nothing listening, on a machine
+   with no Chrome installed.
+4. **Linking is not free.** Cursor reads the union of all three skill
+   directories, so a skill linked into two of them is paid for twice, and an
+   alias under a second name was a double tax until the names were canonicalised.
+
 ## The standard a skill has to meet
 
 A skill earns its place only if it carries knowledge **the model does not
