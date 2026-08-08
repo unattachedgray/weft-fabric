@@ -76,8 +76,8 @@ This is the rule most likely to be broken by a well-meaning agent.
 | Built-in security review | `/security-review` | — | — | — |
 | Built-in browser control | `claude-in-chrome` | — | — | — |
 | Plugin marketplace | yes (`unatt` registered) | no | no | no |
-| Skill discovery | marketplace + `~/.claude/skills` | `~/.codex/skills` | `~/.gemini/config/skills` | not wired |
-| Loads `principles/AGENTS.md` | via `@import` in `~/.claude/CLAUDE.md` | `~/.codex/AGENTS.md` symlink | `~/.gemini/AGENTS.md` symlink | not wired |
+| Skill discovery | marketplace + `~/.claude/skills` | `~/.codex/skills` | `~/.gemini/config/skills` | `~/.cursor/skills-cursor` — **managed, do not link** |
+| Loads `principles/AGENTS.md` | via `@import` in `~/.claude/CLAUDE.md` | `~/.codex/AGENTS.md` symlink | `~/.gemini/AGENTS.md` symlink | not wired (per-project `AGENTS.md` only) |
 
 **A skill is only redundant if it is redundant everywhere.** `security-review`
 and `code-quality` duplicate Claude Code commands — and are the *only*
@@ -93,6 +93,19 @@ clis-why: Claude Code ships its own /security-review; this covers the rest.
 ```
 
 Absent `clis:`, a skill is assumed to apply everywhere.
+
+### Cursor is the exception — do not symlink into it
+
+`~/.cursor/skills-cursor/` is **Cursor's own managed directory**. It carries a
+`.sync-manifest.json` with a `lastSyncedAt` per skill and holds Cursor's shipped
+skills (`babysit`, `canvas`, `create-hook`, `create-rule`, `create-skill`,
+`create-subagent`, `loop`, `migrate-to-skills`, `rename-chat`, `review`, …).
+Cursor re-syncs it, so anything symlinked in is liable to be clobbered — and the
+copies there are Cursor's to manage, not drift for us to "fix".
+
+If this library should reach Cursor, do it through a per-project `AGENTS.md`
+rather than by writing into that directory. Ask the owner first; it is not
+wired today and that may be deliberate.
 
 ## 3. What earns a place here
 
