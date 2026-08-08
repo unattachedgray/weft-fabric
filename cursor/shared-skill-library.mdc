@@ -1,0 +1,30 @@
+---
+description: The skills/agent-instruction files on this machine are shared across Claude Code, Codex, Gemini and Cursor. Read before touching any of them.
+alwaysApply: true
+---
+
+# Shared skill library — read before changing skills or agent instructions
+
+`/home/julian/dev/claude-skills` is the **shared** library for Claude Code,
+Codex, Gemini/Antigravity and Cursor. There is **one copy of everything** and
+every CLI is symlinked to it.
+
+So an edit you make lands in every other agent's context immediately:
+
+- editing `principles/AGENTS.md` changes what Claude, Codex and Gemini load next session
+- editing a `SKILL.md` changes the skill the other CLIs run
+- deleting a skill removes it from **all** of them at once
+
+There is no per-CLI copy, no staging, no review step.
+
+**Fix outright bugs freely** — a broken path, a dangling symlink, a stale
+command. **Adding, retiring, restructuring or re-linking a skill, and any edit
+to `principles/AGENTS.md`, is the owner's call** — not a decision to make inside
+one session because it looked right from here.
+
+The CLIs also differ in built-ins, so a skill that looks redundant here may be
+the only implementation another CLI has. A skill is redundant only if it is
+redundant *everywhere*.
+
+Full contract: **`/home/julian/dev/claude-skills/ARRANGEMENT.md`** — read it
+before any of the above.

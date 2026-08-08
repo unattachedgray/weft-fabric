@@ -105,7 +105,30 @@ clis-why: Claude Code ships its own /security-review; this covers the rest.
 
 Absent `clis:`, a skill is assumed to apply everywhere.
 
-### Cursor is the exception — do not symlink into it
+### Cursor: wired via a per-project rule (2026-08-08)
+
+Cursor has **no global instruction file** — `~/.cursor/AGENTS.md` and
+`~/.cursor/rules/*.mdc` are both invisible to it (probed with markers). What it
+does read, per project, is `AGENTS.md`, `.cursorrules`, and
+`.cursor/rules/*.mdc`.
+
+So the contract is installed per project as a **symlink** to
+`cursor/shared-skill-library.mdc` in this repo — edit the canonical file and
+every project follows. `.cursor/rules/` was chosen over `AGENTS.md` because
+several repos already have an `AGENTS.md` owned by something else (weft's
+diverges from upstream Hermes and is rebase-sensitive); this adds a
+Cursor-only file and touches nothing existing.
+
+```bash
+scripts/install-cursor-rule.sh --all      # every git repo directly under ~/dev
+scripts/install-cursor-rule.sh ~/dev/foo  # or one at a time
+```
+
+Run it for any new repo. The symlink is excluded per-repo via
+`.git/info/exclude` (machine-local — an absolute path to this machine has no
+business in a shared `.gitignore`).
+
+### Cursor's own skills dir is still off-limits
 
 `~/.cursor/skills-cursor/` is **Cursor's own managed directory**. It carries a
 `.sync-manifest.json` with a `lastSyncedAt` per skill and holds Cursor's shipped
