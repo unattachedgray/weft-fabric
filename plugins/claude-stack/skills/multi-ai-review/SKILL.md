@@ -105,6 +105,35 @@ sees outranks its opinion of what you concluded.
    ([2407.16235](https://arxiv.org/abs/2407.16235)) — errors uncorrelated by
    construction. Prefer a linter, a test, or a script over a fourth opinion.
 
+## How it gets invoked
+
+**Automatically, by default.** The `skill-detectors` plugin runs
+`prompt-detectors/high-stakes-review.sh` on every prompt. It matches four
+families of stakes marker — irreversibility/blast radius, security and trust
+boundaries, shared surfaces many agents read, and externally published work —
+and suppresses on obviously small work (typo, rename, lint, bump).
+
+Three modes via `REVIEW_DETECTOR_MODE`:
+
+| Mode | Behaviour |
+|---|---|
+| `auto` **(default)** | Do the work, then run the panel against the result and report the union of findings **before** treating it as done |
+| `suggest` | Mention that a panel is warranted; the user decides |
+| `off` | Silent |
+
+The hook emits a directive rather than executing, because `UserPromptSubmit` has
+a **5-second timeout** and a panel takes 30–90 s. That split is also the safer
+one: the assistant still applies the second gate — *can the reviewers observe
+something Claude cannot?* — which no keyword match can judge, and still honours
+the never-send-secrets rule that a blind exec would trample.
+
+**Manually**, just ask: *"get a second opinion on this"*, *"cross-check that"*,
+*"have the other CLIs look at it"*. Those phrases are matched explicitly, and
+the skill description routes them here anyway.
+
+Turn it down for a session with `REVIEW_DETECTOR_MODE=suggest` (or `off`), or
+permanently in `~/.claude/settings.json` under the plugin's env.
+
 ## Running it
 
 ```bash
