@@ -1,8 +1,8 @@
 ---
 name: firefox-control
 description: Inspect and interact with the user's explicitly armed Firefox tab through Weft's local browser tunnel (looking_glass.py + the Browser Tunnel extension). Use when Claude must view an authenticated page as rendered in Firefox, capture its DOM and screenshot, execute diagnostic JavaScript, click or type into elements, or navigate the armed tab while debugging a live web app or browser extension.
-clis: claude, codex
-clis-why: Codex was the original consumer; Claude Code was added later. Needs the Browser Tunnel extension plus weft's looking_glass relay, so it is machine-specific rather than CLI-specific.
+clis: claude, codex, gemini, cursor
+clis-why: THE capability no CLI or model has natively — a live, authenticated Firefox tab. Not redundant with any built-in browser tool: those drive a fresh throwaway browser with no session. Link it into every CLI.
 ---
 
 # Firefox Control

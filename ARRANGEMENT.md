@@ -156,6 +156,23 @@ If this library should reach Cursor, do it through a per-project `AGENTS.md`
 rather than by writing into that directory. Ask the owner first; it is not
 wired today and that may be deliberate.
 
+### The tunnel is the load-bearing one
+
+`firefox-control` drives the user's **live, authenticated Firefox tab** through
+weft's `looking_glass.py` relay (127.0.0.1:8770) plus the Browser Tunnel
+extension. **No CLI and no model has this natively.** Built-in browser tools
+(`claude-in-chrome`, Playwright, a Chrome bridge) all drive a *fresh throwaway
+browser with no session* — a different capability, not a substitute. Link it
+into every CLI; never treat it as redundant with a built-in.
+
+Cautionary tale: `frontend/browser` was retained on 2026-08-08 partly on the
+assumption it might be the tunnel. It was not — it described a **Chrome** bridge
+on port 8787 requiring a Chrome extension, and on this machine nothing listens
+on 8787 and Chrome is not installed. It documented infrastructure that does not
+exist. Retired. The test that settles this class of question is not "which CLI
+has a built-in" but **"does the infrastructure this skill needs actually exist
+here"**.
+
 ## 3. What earns a place here
 
 A skill is worth keeping only if it carries something **the model does not
