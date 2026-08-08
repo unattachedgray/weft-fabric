@@ -113,13 +113,26 @@ jq '{verdicts,split,high}' "$OUT/panel.json" >&2
 LEDGER_DIR="${PANEL_LEDGER_DIR:-$HOME/.claude-skills-panel}"; mkdir -p "$LEDGER_DIR"
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 KIND="${PANEL_KIND:-unclassified}"
+# Baseline for automatic scoring. PANEL_TARGET is the artifact under review; if
+# the findings were real it gets CHANGED afterwards, and if they were noise it
+# does not. That is an outcome, not an opinion — the same reason this repo
+# measures outcomes adopted rather than activity generated. panel-observe.sh
+# reads these two fields later and needs no human present.
+TARGET="${PANEL_TARGET:-}"
+BASE_SHA=""
+if [ -n "$TARGET" ] && [ -e "$TARGET" ]; then
+  BASE_SHA="$(cd "$(dirname "$TARGET")" && git rev-parse HEAD 2>/dev/null || echo "")"
+  TARGET="$(readlink -f "$TARGET")"
+fi
 for m in $MEMBERS; do
   jq -c --arg run "$RUN_ID" --arg m "$m" --arg kind "$KIND" --arg out "$OUT" \
      --arg model "$(case $m in
         agy)    echo "${PANEL_AGY_MODEL:-default(gemini)}" ;;
         cursor) echo "${PANEL_CURSOR_MODEL:-default(composer)}" ;;
         codex)  echo "default(openai)" ;; *) echo default ;; esac)" \
+     --arg target "$TARGET" --arg base "$BASE_SHA" \
      '{run:$run, ts:(now|todate), kind:$kind, member:$m, model:$model, outdir:$out,
+       target:$target, base_sha:$base,
        verdict:(.verdict//"error"), confidence:(.confidence//null),
        findings:((.findings//[])|length),
        high:((.findings//[])|map(select(.severity=="high"))|length),

@@ -62,10 +62,34 @@ if hit 'typo|rename|comment|whitespace|lint|format(ting)?|bump version|just (a|o
   exit 0
 fi
 
+# ── learned suppression ─────────────────────────────────────────────────────
+# The loop that improves this detector's OWN judgment. panel-observe.sh tracks,
+# per task kind, how often a panel produced a finding that was actually acted
+# on. A kind that has repeatedly yielded nothing gets demoted from auto to
+# suggest — the detector stops spending a panel on work where panels do not pay.
+#
+# Two brakes, because a self-suppressing detector could otherwise switch itself
+# off permanently:
+#   · never below 6 scored rows — thin evidence suppresses nothing
+#   · demote to `suggest`, never to `off` — the nudge survives, so a kind can
+#     always earn its way back
+YIELD_FILE="${PANEL_LEDGER_DIR:-$HOME/.claude-skills-panel}/yield.json"
+if [ "$MODE" = "auto" ] && [ -f "$YIELD_FILE" ] && command -v jq >/dev/null 2>&1; then
+  for k in $reasons; do
+    y=$(jq -r --arg k "$k" '.[$k] // empty | select(.scored >= 6) | .yield' "$YIELD_FILE" 2>/dev/null)
+    if [ -n "$y" ] && awk "BEGIN{exit !($y < 0.15)}"; then
+      MODE=suggest
+      DEMOTED=" (demoted to suggest: kind '$k' has yielded acted-on findings <15% of the time)"
+      break
+    fi
+  done
+fi
+DEMOTED="${DEMOTED:-}"
+
 GATE="Stakes are necessary but NOT sufficient: the other CLIs must be able to OBSERVE something Claude cannot. If they could only restate what you already know, skip and say so. Never send secrets, credentials, PII, or internal source — point reviewers at paths on disk instead of pasting content."
 
 if [ "$MODE" = "auto" ]; then
-  echo "SKILL_SIGNAL: multi-ai-review —${reasons// / }. Do the work, then RUN scripts/panel.sh against the result and report the union of findings before treating it as done. $GATE"
+  echo "SKILL_SIGNAL: multi-ai-review —${reasons// / }. Do the work, then RUN scripts/panel.sh (set PANEL_KIND and PANEL_TARGET so it can score itself) and report the union of findings before treating it as done. $GATE"
 else
-  echo "SKILL_SIGNAL_CANDIDATE: multi-ai-review —${reasons// / }. $GATE"
+  echo "SKILL_SIGNAL_CANDIDATE: multi-ai-review —${reasons// / }.${DEMOTED} $GATE"
 fi

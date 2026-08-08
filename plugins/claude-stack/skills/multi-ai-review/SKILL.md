@@ -204,6 +204,51 @@ re-create the majority filter the harness exists to avoid.
 member to mean anything, and must be re-checked after any CLI version bump.
 The report says so itself when the sample is thin.
 
+### The loop, and why it turns without you
+
+Nobody remembers to score runs. So the loop closes on evidence instead of
+memory:
+
+```
+  detector fires ──► panel runs ──► you act on what was real
+        ▲                                      │
+        │                                      ▼
+   yield table ◄── panel-observe.sh ◄── did the artifact change?
+   (fire or not)     (SessionStart)        (git, no human)
+```
+
+`panel.sh` records `PANEL_TARGET` and the git SHA at run time.
+`panel-observe.sh` — fired from the `SessionStart` hook, so it needs no
+invocation — later checks whether that artifact changed. Acted on ⇒
+`confirmed`. Untouched for 48 h ⇒ `rejected` (or `mixed` if the member produced
+no findings at all, which is not the same as being wrong). Every automatic row
+is stamped `auto:true` and is **provisional**; a human verdict always wins and
+is never overwritten.
+
+**Two signals, deliberately kept apart.** This distinction was learned by
+watching the auto-scorer get it wrong:
+
+| Signal | Question | Source |
+|---|---|---|
+| **Kind yield** | Is a panel worth running on this *kind* of work? | Automatic — adoption |
+| **Member routing** | Who should I read first? | **Human only** |
+
+Adoption cannot answer the second. When a panel finds a real bug the artifact
+changes *once*, which says nothing about which member found it — observed live,
+where an auto-score credited all three members for a bug one of them missed
+entirely. So `--report` and `--route` ignore `auto` rows. Member routing stays
+honest and slow; kind yield moves on its own.
+
+**The feedback that makes it a flywheel rather than a log:** the yield table is
+read by the prompt-detector. A kind whose panels keep producing nothing that
+anyone acts on gets demoted from `auto` to `suggest` — the system stops
+spending panels where panels do not pay. Two brakes stop it disabling itself:
+suppression needs **≥6 scored rows**, and demotion goes to `suggest`, never
+`off`, so a kind can always earn its way back.
+
+Verified end to end: a kind at 0% over 8 rows demotes; the same kind at 3 rows
+does not.
+
 ### The road map: this system develops by being used
 
 Nothing here is finished. The routing is supposed to get better, and the only

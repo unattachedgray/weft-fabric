@@ -5,7 +5,19 @@
 #   panel-score.sh --report [kind]
 #   panel-score.sh --pending
 #
-# WHY SCORING IS MANUAL. panel.sh deliberately records `outcome:null`. A finding
+# TWO SIGNALS, DELIBERATELY SEPARATED.
+#   · KIND yield  — "was running a panel here worth it?" Answered automatically
+#     by panel-observe.sh from whether the artifact was acted on. Coarse but
+#     unattended, and it drives whether the detector fires at all.
+#   · MEMBER routing — "who should I read first?" Answered ONLY by human
+#     scoring below. Adoption cannot answer it: when a panel finds a real bug,
+#     the artifact changes once, and that says nothing about which member found
+#     it. Observed live — an auto-score credited all three members for a bug one
+#     of them missed entirely.
+# So --report and --route ignore auto rows. Member routing stays honest and
+# stays slow; kind yield moves on its own.
+#
+# WHY MEMBER SCORING IS MANUAL. panel.sh deliberately records `outcome:null`. A finding
 # counts only once someone has CHECKED it against evidence. Counting raw
 # findings would rank whichever member talks most — and the two most confident
 # claims in the 2026-08-08 audit (an invocation column that was structurally
@@ -25,7 +37,7 @@ LEDGER="$LEDGER_DIR/ledger.jsonl"
 case "${1:-}" in
   --route)
     KIND="${2:?usage: panel-score.sh --route <kind>}"
-    N=$(jq -s --arg k "$KIND" 'map(select(.outcome!=null and .kind==$k))|length' "$LEDGER")
+    N=$(jq -s --arg k "$KIND" 'map(select(.outcome!=null and (.auto//false)==false and .kind==$k))|length' "$LEDGER")
     if [ "$N" -lt 12 ]; then
       echo "kind=$KIND: $N scored rows — NOT ENOUGH. Run all members; routing is not earned yet."
       echo "  (12+ per kind before order means anything. Until then every member is read equally.)"
@@ -33,7 +45,7 @@ case "${1:-}" in
     fi
     echo "kind=$KIND: read in this order (confirmed-rate, $N scored rows)"
     jq -s --arg k "$KIND" '
-      map(select(.outcome!=null and .kind==$k)) | group_by(.member)
+      map(select(.outcome!=null and (.auto//false)==false and .kind==$k)) | group_by(.member)
       | map({m:.[0].member, r:((map(select(.outcome=="confirmed"))|length)
                               + (map(select(.outcome=="mixed"))|length)*0.5)
                              / length * 100 | floor})
@@ -52,7 +64,7 @@ case "${1:-}" in
     echo "confirmed-rate by member${KIND:+ (kind=$KIND)} — scored runs only"
     echo
     jq -s --arg kind "$KIND" '
-      map(select(.outcome != null))
+      map(select(.outcome != null and (.auto // false) == false))
       | map(select($kind == "" or .kind == $kind))
       | group_by(.member)
       | map({member: .[0].member,

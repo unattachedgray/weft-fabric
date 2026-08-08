@@ -73,3 +73,10 @@ print(json.dumps({
 else
   printf '%s\n' "$output"
 fi
+
+# Close the multi-ai-review loop unattended. Auto-scores any panel run whose
+# artifact has since changed (or gone 48h untouched) and refreshes the per-kind
+# yield table the prompt-detector reads. Cheap, silent, and the only reason the
+# routing ever improves — nobody remembers to score runs by hand.
+OBS="$HOME/dev/claude-skills/plugins/claude-stack/skills/multi-ai-review/scripts/panel-observe.sh"
+[ -x "$OBS" ] && timeout 8 bash "$OBS" >/dev/null 2>&1 || true
