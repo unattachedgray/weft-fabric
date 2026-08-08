@@ -62,9 +62,21 @@ for d in ~/.claude/skills ~/.codex/skills ~/.gemini/config/skills; do
 done
 ```
 
-The same directory may be linked under a different name per CLI (Codex calls
-`design-taste-frontend` "taste-skill"). That is fine — the *target* is what
-matters.
+**Link every skill under its canonical name. Aliases are not free.**
+
+Cursor's discovery surface is the **union of all three directories** — it reads
+`~/.cursor/skills-cursor` *and* `~/.claude/skills` *and* `~/.codex/skills`
+(verified 2026-08-08 by asking it to list its skills: 30 entries from all three).
+
+So a skill linked in two directories under two different names appears **twice**
+in Cursor's surface. Codex historically called `design-taste-frontend`
+"taste-skill", `gpt-taste` "gpt-tasteskill", and so on; each of those cost a
+duplicate entry. Renamed to canonical on 2026-08-08 — Cursor dedupes by name, so
+the count dropped 31 → 30 with nothing lost.
+
+The corollary matters for pruning: the attention cost of a skill linked in both
+Claude and Codex is paid **twice over** in Cursor. Linking a skill into a CLI
+that will never invoke it is not harmless.
 
 ## 2. The CLIs do not have the same features
 
