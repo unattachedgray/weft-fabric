@@ -204,6 +204,40 @@ re-create the majority filter the harness exists to avoid.
 member to mean anything, and must be re-checked after any CLI version bump.
 The report says so itself when the sample is thin.
 
+### The road map: this system develops by being used
+
+Nothing here is finished. The routing is supposed to get better, and the only
+way it does is by running panels, scoring them honestly, and letting evidence
+accumulate per task kind.
+
+```bash
+scripts/panel-score.sh --route <kind>     # what the ledger says about order
+```
+
+It currently refuses to answer:
+
+```
+kind=script-review: 3 scored rows — NOT ENOUGH. Run all members;
+routing is not earned yet.
+```
+
+That refusal is the design, not a gap. Three deliberate properties:
+
+- **Routing is advisory and never wired into dispatch.** `panel.sh` does not
+  read the ledger. Auto-demoting a member on thin evidence would rebuild the
+  majority filter this whole harness exists to avoid.
+- **It orders attention, never membership.** Every member always runs. The lone
+  finding nobody else had is the product.
+- **It is per-kind and perishable.** `script-review` and `architecture-review`
+  will not rank the same, and any ranking dies at the next CLI version bump.
+
+So the honest state today: **capability routing is a hypothesis with three data
+points.** Tag every run with `PANEL_KIND`, score it, and revisit when a kind
+crosses a dozen rows. What we know so far is only that Codex and Cursor both
+caught a real `ln -sfn` clobber that Antigravity missed — one run, on one kind
+of artifact. That is an anecdote, and the tool says so rather than dressing it
+up as a routing table.
+
 ### Worked example — the first two scored runs
 
 Run 1 asked whether every skill was reachable by every CLI that needed it. All

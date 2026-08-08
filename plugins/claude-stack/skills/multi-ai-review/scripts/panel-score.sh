@@ -23,6 +23,25 @@ LEDGER="$LEDGER_DIR/ledger.jsonl"
 [ -f "$LEDGER" ] || { echo "no ledger yet: $LEDGER" >&2; exit 1; }
 
 case "${1:-}" in
+  --route)
+    KIND="${2:?usage: panel-score.sh --route <kind>}"
+    N=$(jq -s --arg k "$KIND" 'map(select(.outcome!=null and .kind==$k))|length' "$LEDGER")
+    if [ "$N" -lt 12 ]; then
+      echo "kind=$KIND: $N scored rows — NOT ENOUGH. Run all members; routing is not earned yet."
+      echo "  (12+ per kind before order means anything. Until then every member is read equally.)"
+      exit 0
+    fi
+    echo "kind=$KIND: read in this order (confirmed-rate, $N scored rows)"
+    jq -s --arg k "$KIND" '
+      map(select(.outcome!=null and .kind==$k)) | group_by(.member)
+      | map({m:.[0].member, r:((map(select(.outcome=="confirmed"))|length)
+                              + (map(select(.outcome=="mixed"))|length)*0.5)
+                             / length * 100 | floor})
+      | sort_by(-.r) | to_entries
+      | .[] | "  \(.key+1). \(.value.m)  \(.value.r)%"' "$LEDGER" -r
+    echo "  All members still run. This orders ATTENTION, never membership."
+    exit 0 ;;
+
   --pending)
     jq -r 'select(.outcome==null) | "\(.run)  \(.kind)  \(.member)  findings=\(.findings)"' "$LEDGER" \
       | sort -u
@@ -69,3 +88,8 @@ jq -c --arg run "$RUN" --arg m "$MEMBER" --arg o "$OUTCOME" --arg n "$NOTE" \
   'if .run==$run and .member==$m then .outcome=$o | .note=$n | .scored_at=(now|todate) else . end' \
   "$LEDGER" >"$TMP" && mv "$TMP" "$LEDGER"
 echo "scored $RUN/$MEMBER = $OUTCOME"
+
+# --route <kind> — what the ledger currently says about member order for a kind.
+# Deliberately NOT wired into panel.sh: routing stays advisory until the sample
+# is real. Auto-demoting a member on thin data would rebuild the majority filter
+# this harness exists to avoid.
