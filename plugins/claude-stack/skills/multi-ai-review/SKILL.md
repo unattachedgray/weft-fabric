@@ -1,121 +1,153 @@
 ---
 name: multi-ai-review
-description: Parallel cross-validation of an important judgment by Gemini and Codex CLI. Use when the user asks for a "second opinion", "cross review", "external review", "peer review", "multi-AI review", or expresses doubt about a Claude-only judgment on architectural / design / long-form decisions. Skip for routine coding, small fixes, or anything involving secrets or PII.
-clis: claude, codex, gemini
-clis-why: Cross-checks a judgment with the OTHER CLIs, so it assumes they are installed.
+description: Cross-architecture review — send a high-stakes artifact or judgment to the other agent CLIs (Codex, Antigravity, Cursor) for INDEPENDENT inspection, then reconcile the union of their findings. Use only when accuracy matters more than cost and the reviewers can each observe something you cannot. Not a vote.
+clis: claude, codex, gemini, cursor
+clis-why: Dispatches to the sibling CLIs, so it assumes they are installed. Only Claude runs it as the generator.
 ---
 
-# Multi-AI Review — parallel external-model cross-validation
+# Cross-architecture review
 
-Pull in Gemini and Codex (OpenAI) in parallel to stress-test an important Claude judgment. Aggregate **agreement / disagreement / new issues** that single-model judgment would miss.
+Send one artifact to several **architecturally different** agents, let each
+inspect it with its own tools, and reconcile what they find. Reserved for work
+where being wrong is expensive.
 
-Ported from [gd452/skills/gd-multi-ai-review](https://github.com/gd452/skills/tree/main/gd-multi-ai-review). The original is Korean.
+**This is not a jury and the output is not a verdict.** The evidence below is
+emphatic that voting destroys the very thing this is for.
 
-## When to use
+## The gate — both conditions, or don't run it
 
-| Situation | Run it? |
-|---|---|
-| Architecture / system design decision | ✅ strongly recommended |
-| Long-form artifact draft (spec, business plan, design doc) | ✅ recommended |
-| Hard technical choice (model selection, infra picking, framework call) | ✅ recommended |
-| Routine coding, typo fixes, small refactors | ❌ overkill |
-| Anything containing secrets, internal source, or PII | ❌ forbidden — external models see the brief |
+1. **High stakes.** Long-lived, wide blast radius, expensive to get wrong — a
+   shared config, a migration, a security boundary, a published document.
+2. **Genuinely different vantage points.** Each reviewer can observe something
+   you cannot: different tool access, different state, a different view of the
+   same system.
 
-## Prerequisites
+Fail (2) and you buy expensive consensus. Measured on this machine: asked a
+question answerable from general knowledge, three vendors returned the same
+answer in 4.6 s. Three agents agreeing on something any one of them knew is
+pure cost.
 
-- `gemini` CLI on PATH + `GEMINI_API_KEY` (or ChatGPT-style OAuth). See sibling `gemini` skill.
-- `codex` CLI on PATH + `OPENAI_API_KEY` (or ChatGPT OAuth).
-- If only one is installed, run that side and tell the user the other is missing — don't refuse.
+**Never send:** secrets, credentials, PII, or internal source you would not
+paste into a third-party product. Ask before dispatching, every time.
 
-## Workflow
+## What the evidence says — read before designing a variant
 
-### Phase 1 — write a self-contained brief
+Cross-model review is real, but almost every intuitive way to use it is wrong.
 
-External models have no conversation context. The brief must stand alone.
+**Do not let a model review itself.** Self-preference is measured and
+capability-linked: GPT-4 favours its own answers by ~10 pp, Claude by ~25 pp,
+and self-recognition ability *causes* the preference
+([2404.13076](https://arxiv.org/abs/2404.13076),
+[2306.05685](https://arxiv.org/abs/2306.05685)).
 
-Include:
-1. **Subject** — what's being reviewed (URL, file content, or inline excerpt)
-2. **Claude's current judgment** — the conclusion / concerns already reached
-3. **Question** — soundness / alternatives / what's missed
+**Direction is load-bearing — a weaker reviewer damages a stronger generator.**
+From a controlled cross-model code-review study
+([2607.21656](https://arxiv.org/abs/2607.21656), July 2026):
 
-Save to `reports/multi-ai-review-{YYYYMMDD-HHMM}-{topic-slug}/brief.md`. The slug is 12–30 lowercase-hyphenated chars (e.g. `harness-design-review`, `auth-rewrite-tradeoffs`). Same-day reviews stay distinguishable just from folder names.
-
-**Sensitivity gate (mandatory):** before sending, explicitly ask the user whether the brief contains secrets, internal-only source, or PII. If yes, stop — these go to external providers.
-
-### Phase 2 — dispatch in parallel
-
-Fire both Bash calls in a **single message** with `run_in_background: true`. Sequential calls double the latency.
-
-**Gemini** (stdin):
-```bash
-cat {brief-path} | gemini -p "{question}" 2>&1 | tee {reports-dir}/gemini.txt
-```
-
-**Codex** (must use `--sandbox read-only` + `--skip-git-repo-check`; `-o` captures the final answer):
-```bash
-codex exec \
-  --sandbox read-only \
-  --skip-git-repo-check \
-  -o {reports-dir}/codex.txt \
-  "$(cat {brief-path})
-
----
-
-{question}"
-```
-
-Record the two task IDs. Wait for completion notifications — do not poll.
-
-### Phase 3 — collect
-
-Read both output files when notifications arrive. Failure mapping:
-
-| Symptom | Cause | Action |
+| Setup | Δ pass rate | fixes / regressions |
 |---|---|---|
-| `Not inside a trusted directory` | Codex git-repo check | add `--skip-git-repo-check` and retry |
-| `auth required` / 401 | expired key | ask user to refresh |
-| timeout (>5 min) | brief too large | shrink brief, retry |
-| one side fails | transient | proceed with the surviving side, note the gap |
+| Claude reviews Codex | **+18.1 pp** | 26 / 5 |
+| Codex self-reviews | +12.9 pp | 21 / 6 |
+| Claude self-reviews | 0.0 pp | 3 / 3 |
+| **Codex reviews Claude** | **−8.6 pp** | 3 / **13** |
 
-### Phase 3.5 — multi-round debate (optional)
+**Different vendor ≠ independent.** A 9-judge panel yields only **n_eff ≈ 2.18**
+effective votes; Claude×Gemini correlate at φ=0.603 — *higher* than a
+within-OpenAI pair — and deliberately picking one judge per vendor **lowered**
+n_eff to 1.93 ([2605.29800](https://arxiv.org/abs/2605.29800)). Stronger models
+have *more* correlated errors, not fewer
+([2506.07962](https://arxiv.org/abs/2506.07962), 350 models).
 
-When a single round leaves big unresolved disagreement, expand to 2–3 rounds. User can request, or you auto-propose when verdicts diverge sharply.
+**Voting destroys the complementarity it is meant to harvest.** Model
+complementarity is large — an oracle gap of +83% on Defects4J, with one 6.7B
+model uniquely solving 26 bugs no other touched — but consensus selection
+collapsed that from 112 solved problems to 22–25. The lone correct answer is
+exactly what a majority filters out
+([2510.21513](https://arxiv.org/abs/2510.21513)). Self-MoA beats mixed MoA by
+6.6 pp ([2502.00674](https://arxiv.org/abs/2502.00674)); multi-agent debate
+loses to plain self-consistency at matched compute
+([2310.01798](https://arxiv.org/abs/2310.01798)).
 
-- **Round 1**: independent answers (Phases 2–3)
-- **Round 2**: re-prompt each with the other's R1 answer included → rebuttal / concession
-- **Round 3** (optional): final positions
+### The reconciliation of that evidence with why this still works
 
-R2 prompt template:
+The papers measure agents **judging each other's reasoning**. That is the
+direction that goes negative.
+
+What pays is agents **observing what the others structurally cannot.** In the
+2026-08-08 skills audit, Cursor's single best finding — that it reads the union
+of all three skill directories, so per-CLI aliases cost double — was available
+to it only because it was looking at its own discovery surface from inside
+itself. No brief could have carried it, because the generator did not know it.
+In the same exchange, when Cursor judged *reasoning* rather than observing
+state, it was wrong twice (citing invocation counts that were structurally zero,
+and proposing a trim that would have gutted three CLIs' only review path).
+
+So: **prize observation, discount judgment.** A reviewer's report of what it
+sees outranks its opinion of what you concluded.
+
+## Design rules that follow
+
+1. **Never send a summary when you can send the system.** A self-contained brief
+   throws away the reviewer's vantage point, which is the entire asset. Point
+   them at the real files, the real machine, the real artifact.
+2. **Report the union of findings; never a majority verdict.** One specific,
+   evidence-bearing finding from one reviewer outranks three vague agreements.
+   "2 of 3 agree" is nearly worthless — n_eff ≈ 2 no matter how many you add.
+3. **Require evidence per claim, and rebut.** Every finding needs something
+   checkable. Verify the load-bearing ones yourself before acting. In the audit
+   above, both sides' most confident claims were the ones that collapsed.
+4. **Claude generates, the others review.** Not the reverse — see the table.
+5. **Land it in a durable artifact.** Findings that stay in chat evaporate. The
+   audit's four rules went into `skill-audit`; that is the deliverable, not the
+   transcript.
+6. **A deterministic checker beats another model.** The strongest diversity
+   result in the code literature is LLM + static analyzer
+   ([2407.16235](https://arxiv.org/abs/2407.16235)) — errors uncorrelated by
+   construction. Prefer a linter, a test, or a script over a fourth opinion.
+
+## Running it
+
+```bash
+scripts/panel.sh <prompt-file> [outdir]
+# env: PANEL_MEMBERS="codex agy cursor"   PANEL_TIMEOUT=300
 ```
-# Round 2 — read the opposing answer and respond.
 
-## Opposing position (summary):
-{other model's R1 summary}
+Dispatches in parallel, normalises to one JSON array of
+`{member, verdict, confidence, findings[], missed}`, and prints the
+disagreement surface. Measured: 3 vendors, ~33 s wall clock.
 
-## Questions:
-1. Where do you agree, and where do you push back?
-2. Does any of your position change in light of this?
-```
+Write the prompt to point at real paths rather than pasting content, e.g.
+*"Audit `~/dev/claude-skills` on disk. Report what you find, with evidence."*
 
-Outputs: `gemini-r{N}.txt`, `codex-r{N}.txt` in the report dir.
+### CLI invocations — every flag here cost a failure to find
 
-### Phase 4 — synthesize
+| CLI | Command | Extract |
+|---|---|---|
+| `claude` | `claude -p --permission-mode plan --output-format json` | `.result` |
+| `codex` | `codex exec --sandbox read-only --skip-git-repo-check --output-schema S -o F` | `F` |
+| `agy` | `agy --output-format stream-json --dangerously-skip-permissions --json-schema S -p` | last `.result.response` |
+| `cursor-agent` | `cursor-agent -p --trust --mode ask --output-format json` | `.result` |
 
-Produce a single synthesis in `{reports-dir}/synthesis.md` covering:
+- **`codex exec` hangs forever on an open inherited stdin** — `</dev/null` is
+  mandatory. Any naive parallel fan-out deadlocks without it.
+- **`codex --output-schema` needs an OpenAI *strict* schema**:
+  `additionalProperties: false` at every level, every property in `required`,
+  else HTTP 400 and `turn.failed`. See `scripts/schema-strict.json`.
+- **`agy` uses Go flag parsing** — flags must precede `-p`, and the prompt is
+  `-p`'s value. `agy -p --mode plan "…"` silently makes `"--mode"` the prompt
+  and returns a plausible-looking help essay.
+- **`agy --mode plan` is unusable headless**: alone it auto-denies tools and
+  returns `status:"SUCCESS"` with an *empty* body and exit 0; with
+  `--dangerously-skip-permissions` it returns `status:"ERROR"`. Drop it, and
+  always check for an empty body.
+- **`agy --json-schema` only binds under `--output-format stream-json`** — under
+  `json` it silently emits markdown prose instead.
+- **`cursor-agent -p` hard-fails in an untrusted directory** without `--trust`,
+  and is the only one of the four that can write files with no permission flag.
 
-- **Agreement** — points both models converge on
-- **Disagreement** — explicit conflicts, with each side's reasoning
-- **New issues** — things neither Claude's brief nor the prompt anticipated
-- **Recommendation** — your updated judgment, citing which side(s) you weighted and why
+## Cost
 
-Then surface the synthesis to the user. Don't dump the raw model outputs unless asked — the report dir is the audit trail.
-
-## Why this works
-
-Single-model judgment has a known echo-chamber failure mode: a confident wrong answer in the prompt biases its own follow-up reasoning. Parallel independent answers from different model families surface assumptions and blind spots that a single model — including Claude — won't challenge in itself. The multi-round debate is what catches assumptions that survive round 1 but break under cross-examination.
-
-## Out of scope
-
-- **Secrets / PII / internal source** — never send to external providers, even for "just a quick check"
-- **Routine code edits** — the latency and token cost don't pay back on small changes
-- **Production rollout decisions** — this skill informs a judgment; it doesn't replace human sign-off on deploys
+Several minutes of wall clock and real tokens across three vendors. It earned
+its keep once on this machine — for a config loaded into every session of every
+CLI. It would not pay for a routine refactor. If you cannot name what makes this
+artifact expensive to get wrong, don't run it.

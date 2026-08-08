@@ -1,0 +1,10 @@
+{"type":"object","additionalProperties":false,
+ "required":["verdict","confidence","findings","missed"],
+ "properties":{
+  "verdict":{"type":"string","enum":["agree","disagree","partial"]},
+  "confidence":{"type":"number"},
+  "findings":{"type":"array","items":{"type":"object","additionalProperties":false,
+    "required":["severity","claim","evidence"],
+    "properties":{"severity":{"type":"string","enum":["high","medium","low"]},
+                  "claim":{"type":"string"},"evidence":{"type":"string"}}}},
+  "missed":{"type":"string"}}}

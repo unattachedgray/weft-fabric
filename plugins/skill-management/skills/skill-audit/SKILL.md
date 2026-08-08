@@ -102,6 +102,21 @@ python3 validate-skills.py
 
 # 4. Shadowing: compare skill names against the current built-ins.
 ls plugins/*/skills/ | sort -u
+
+# 5. clis: tags that are not backed by an actual symlink. A skill tagged
+#    "codex, gemini" but linked nowhere is a silent lie — it reads as covered.
+for f in $(grep -rl '^clis:' plugins/*/skills/*/SKILL.md); do
+  n=$(basename $(dirname $f)); tags=$(grep '^clis:' $f | cut -d: -f2-)
+  for cli in claude codex gemini; do
+    case "$tags" in *"$cli"*)
+      case $cli in
+        claude) d=~/.claude/skills ;; codex) d=~/.codex/skills ;;
+        gemini) d=~/.gemini/config/skills ;;
+      esac
+      [ -e "$d/$n" ] || echo "UNLINKED  $n tagged $cli but missing from $d" ;;
+    esac
+  done
+done
 ```
 
 ### Which skills are actually used
