@@ -10,24 +10,9 @@
   },
   "plugins": [
     {
-      "name": "ai-agents",
-      "source": "./plugins/ai-agents",
-      "description": "Building autonomous AI agents: architecture, tool integration, persistent memory systems, multi-agent orchestration / computer-use patterns, local CLI agent management, refactoring bloated AGENTS.md/CLAUDE.md files, and WALT (Salesforce) for auto-discovering reusable browser-automation tools from any website."
-    },
-    {
-      "name": "automation",
-      "source": "./plugins/automation",
-      "description": "Cross-tool workflow automation: Jira issue/sprint/backlog management, configurable metric watchers with alerts (URLs, shell commands, latency), and Zapier orchestration via MCP + webhooks."
-    },
-    {
       "name": "business",
       "source": "./plugins/business",
       "description": "Business / go-to-market: CEO advisory and strategy, marketing ideas (140 SaaS marketing approaches), App Store Optimization, UX research (interviews, personas, journey mapping), email systems (deliverability, automation, transactional)."
-    },
-    {
-      "name": "catalog",
-      "source": "./plugins/catalog",
-      "description": "Index of every skill available in this marketplace. Install on every machine — even machines that don't have all plugins installed will know what's available, so Claude can suggest installing on demand."
     },
     {
       "name": "claude-stack",
@@ -50,11 +35,6 @@
       "description": "CI/CD, containerization, deployment, GitHub workflow automation, shell scripting. Includes Docker (multi-stage builds, hardening, Compose), Vercel + Next.js deployment, and Bash/Linux terminal patterns."
     },
     {
-      "name": "engineering",
-      "source": "./plugins/engineering",
-      "description": "Engineering discipline curated from Matt Pocock's skills: deep-module design (codebase-design + design-it-twice), test-driven development, domain modeling with a ubiquitous-language glossary + ADRs, hard-bug diagnosis, throwaway prototyping, architecture-deepening reports, issue triage, and PRD/issue authoring — plus relentless grilling sessions, teaching, and conversation handoff. Small, composable, philosophy-first; TypeScript examples throughout."
-    },
-    {
       "name": "frontend",
       "source": "./plugins/frontend",
       "description": "Frontend stack: React + Next.js, TypeScript-based component patterns, Tailwind v4, design systems / UI design tokens, mobile-first design, browser automation, theme application, accessibility/WIG compliance, and text-aware layout via pretext."
@@ -73,11 +53,6 @@
       "name": "skill-management",
       "source": "./plugins/skill-management",
       "description": "Discover, create, and propagate Claude Code skills: find-skills (search/install from ecosystem), skill-development (full TDD lifecycle), skill-enhance (propagate a tech across your library)."
-    },
-    {
-      "name": "workflow",
-      "source": "./plugins/workflow",
-      "description": "Project-agnostic workflow skills: structured development lifecycle, PRD-driven autonomous builds, eval testing, persona switching, multi-step planning, brainstorming, and full-stack app orchestration from natural-language input."
     }
   ]
 }
