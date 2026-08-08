@@ -137,9 +137,20 @@ permanently in `~/.claude/settings.json` under the plugin's env.
 ## Running it
 
 ```bash
-scripts/panel.sh <prompt-file> [outdir]
-# env: PANEL_MEMBERS="codex agy cursor"   PANEL_TIMEOUT=300
+scripts/panel run <prompt-file> [outdir]   # dispatch, collect verdicts
+scripts/panel observe | yield              # auto-score from adoption
+scripts/panel score <run> <member> <c|r|m> # human verdict (always wins)
+scripts/panel report [kind] | pending | route <kind>
+scripts/panel detect                       # prompt on stdin
+# env: PANEL_MEMBERS PANEL_TIMEOUT PANEL_KIND PANEL_TARGET PANEL_*_MODEL
 ```
+
+**One file.** This was four scripts across two plugins plus state in `$HOME`,
+with the detector in one plugin reading a yield file written by the observer in
+another through a hardcoded path — uninstall either and the other failed
+silently. To port it now: copy `scripts/panel`, and drop a two-line shim
+wherever the host's hook mechanism wants one (see
+`skill-detectors/prompt-detectors/high-stakes-review.sh`).
 
 Dispatches in parallel, normalises to one JSON array of
 `{member, verdict, confidence, findings[], missed}`, and prints the
@@ -179,7 +190,7 @@ Write the prompt to point at real paths rather than pasting content, e.g.
 The panel records itself, so routing improves instead of staying a guess.
 
 ```bash
-PANEL_KIND=script-review scripts/panel.sh brief.md      # tag the run
+PANEL_KIND=script-review scripts/panel run brief.md      # tag the run
 scripts/panel-score.sh --pending                        # what awaits scoring
 scripts/panel-score.sh <run> <member> confirmed|rejected|mixed "why"
 scripts/panel-score.sh --report [kind]                  # confirmed-rate per member
@@ -217,8 +228,8 @@ memory:
    (fire or not)     (SessionStart)        (git, no human)
 ```
 
-`panel.sh` records `PANEL_TARGET` and the git SHA at run time.
-`panel-observe.sh` — fired from the `SessionStart` hook, so it needs no
+`panel run` records `PANEL_TARGET` and the git SHA at run time.
+`panel observe` — fired from the `SessionStart` hook, so it needs no
 invocation — later checks whether that artifact changed. Acted on ⇒
 `confirmed`. Untouched for 48 h ⇒ `rejected` (or `mixed` if the member produced
 no findings at all, which is not the same as being wrong). Every automatic row
@@ -256,7 +267,7 @@ way it does is by running panels, scoring them honestly, and letting evidence
 accumulate per task kind.
 
 ```bash
-scripts/panel-score.sh --route <kind>     # what the ledger says about order
+scripts/panel route <kind>     # what the ledger says about order
 ```
 
 It currently refuses to answer:
