@@ -102,8 +102,20 @@ comm -23 \
       sed 's/.*:"//;s/"//;s/^.*://' | sort -u)
 ```
 
-Note the transcripts only cover retained sessions, so absence is weak evidence
-over a short window and strong evidence over months.
+**Zero invocations only means something if the skill was reachable.** Until the
+marketplace was registered on 2026-08-08 at 16:09, all but ~6 symlinked skills
+were installable by nobody — so their invocation count was structurally zero and
+carries no information about their worth. Before citing usage as evidence,
+confirm the skill has actually been *reachable* for the window you are measuring:
+
+```bash
+stat -c '%y  marketplace registered' ~/.claude/plugins/known_marketplaces.json
+ls -l ~/.claude/skills ~/.codex/skills ~/.gemini/config/skills   # what was linked
+```
+
+Transcripts also only cover retained sessions. So: absence is weak evidence over
+a short window, strong evidence over months, and NO evidence at all for a skill
+nothing could invoke.
 
 Judgment: a skill that exists for a rare-but-critical moment (a restore
 procedure, an incident playbook) is allowed zero hits. A "how to write React"
