@@ -191,9 +191,56 @@ than a verdict about the model.
 
 Two runs, two real defects, both in code written earlier the same day.
 
-## Cost
+## Economics on this machine
 
-Several minutes of wall clock and real tokens across three vendors. It earned
-its keep once on this machine — for a config loaded into every session of every
-CLI. It would not pay for a routine refactor. If you cannot name what makes this
-artifact expensive to get wrong, don't run it.
+The constrained resource is **Claude**, not the panel. Nearly all work runs
+through Claude Code on a Max subscription; the Codex, Antigravity and Cursor
+subscriptions sit largely idle. So a panel run does not spend the scarce budget
+— it **spends the spare one and spares the scarce one.**
+
+That inverts the usual framing. The costs that remain are real but small: a few
+minutes of wall clock, and your attention to reconcile the findings. There is no
+token-budget argument against running it on anything genuinely important.
+
+What still gates it is the second condition in *The gate* — different vantage
+points. A panel that can only restate what you already know is waste at any
+price.
+
+## Three reasons to reach for another CLI
+
+Review is only one of them, and the harness serves all three:
+
+1. **Verification** — an artifact is high-stakes and the others can observe
+   something you cannot. This is the panel's main job.
+2. **Capacity** — offload work that would otherwise burn the Claude budget.
+   Nothing about this needs architectural diversity; it is pure billing.
+3. **Capability** — another CLI has a feature the task requires. This is the
+   one that gets forgotten.
+
+### Know what each one actually is
+
+`codex`, `agy` and `cursor-agent` each default to their own house architecture
+— OpenAI, Gemini and Composer respectively — so the default panel already gives
+four distinct architectures with Claude as generator. Leave the defaults alone
+for review work.
+
+But **`cursor-agent` and `agy` are multi-vendor gateways, not vendors**:
+
+| Gateway | Also serves |
+|---|---|
+| `cursor-agent` | `gpt-5.3-codex` (4 effort tiers), `gpt-5.2`, `cursor-grok-4.5`, **`claude-opus-5-thinking-high` — 1M context** |
+| `agy` | `gemini-3.6-flash`, `gemini-3.1-pro`, `claude-sonnet-4-6`, `claude-opus-4-6`, `gpt-oss-120b` |
+
+Two consequences, and they point opposite ways:
+
+- **For review, never pin a member to a Claude model.** You would be reviewing
+  Claude's work with Claude, which the self-preference evidence above says is
+  worth roughly nothing. A panel of "three different CLIs" can silently become
+  one architecture in three hats.
+- **For capacity or context, pinning to Claude is exactly right.**
+  `PANEL_CURSOR_MODEL=claude-opus-5-thinking-high` buys a **1M-token window on
+  Cursor's quota** rather than the Claude subscription's — a capability the Max
+  plan does not otherwise give you here.
+
+The ledger records the model used on every row, so a panel can never quietly
+lose its diversity without leaving evidence.

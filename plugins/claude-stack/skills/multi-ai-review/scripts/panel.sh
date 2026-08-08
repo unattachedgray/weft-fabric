@@ -13,6 +13,25 @@ PROMPT_FILE="${1:?usage: panel.sh <prompt-file> [outdir]}"
 OUT="${2:-$(mktemp -d -t panel-XXXX)}"; mkdir -p "$OUT"
 TIMEOUT="${PANEL_TIMEOUT:-300}"
 MEMBERS="${PANEL_MEMBERS:-codex agy cursor}"
+
+# MODEL SELECTION. Each CLI defaults to its own house architecture — codex to
+# OpenAI, agy to Gemini, cursor to Composer — so the default panel already gives
+# four distinct architectures against a Claude generator. Leave it alone unless
+# you have a reason.
+#
+# But know that cursor-agent and agy are multi-vendor GATEWAYS, not vendors.
+# cursor can serve gpt-5.3-codex, grok-4.5 or claude-opus-5-thinking (1M ctx);
+# agy can serve claude-sonnet-4-6, claude-opus-4-6 or gpt-oss-120b. Two
+# consequences:
+#   · Pinning a member to a Claude model DESTROYS the diversity premise — you
+#     would be reviewing Claude's work with Claude. Never do it for review.
+#   · Doing exactly that is CORRECT when the job is capacity or context rather
+#     than diversity: PANEL_CURSOR_MODEL=claude-opus-5-thinking-high buys a 1M
+#     window on Cursor's quota instead of the Claude subscription's.
+# Whatever is used is recorded in the ledger, so a panel can never silently
+# become one architecture wearing three hats.
+PANEL_AGY_MODEL="${PANEL_AGY_MODEL:-}"        # empty = agy's own default (Gemini)
+PANEL_CURSOR_MODEL="${PANEL_CURSOR_MODEL:-}"  # empty = cursor's own default (Composer)
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCHEMA="$HERE/schema-strict.json"   # OpenAI strict: additionalProperties:false + all props required
 
@@ -40,9 +59,11 @@ run() {
     # Without skip-permissions it auto-denies tools and returns status:"SUCCESS"
     # with an EMPTY response and exit 0. --json-schema only binds under stream-json.
     agy)    timeout "$TIMEOUT" agy --output-format stream-json --dangerously-skip-permissions \
+              ${PANEL_AGY_MODEL:+--model "$PANEL_AGY_MODEL"} \
               --json-schema "$SCHEMA" -p "$PROMPT" ;;
     # GOTCHA: hard-fails ("Workspace Trust Required") in any untrusted dir without --trust.
     cursor) timeout "$TIMEOUT" cursor-agent -p --trust --mode ask --output-format json \
+              ${PANEL_CURSOR_MODEL:+--model "$PANEL_CURSOR_MODEL"} \
               "$PROMPT" ;;
   esac </dev/null >"$OUT/$name.raw" 2>"$OUT/$name.err"
   rc=$?
@@ -94,7 +115,11 @@ RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 KIND="${PANEL_KIND:-unclassified}"
 for m in $MEMBERS; do
   jq -c --arg run "$RUN_ID" --arg m "$m" --arg kind "$KIND" --arg out "$OUT" \
-     '{run:$run, ts:(now|todate), kind:$kind, member:$m, outdir:$out,
+     --arg model "$(case $m in
+        agy)    echo "${PANEL_AGY_MODEL:-default(gemini)}" ;;
+        cursor) echo "${PANEL_CURSOR_MODEL:-default(composer)}" ;;
+        codex)  echo "default(openai)" ;; *) echo default ;; esac)" \
+     '{run:$run, ts:(now|todate), kind:$kind, member:$m, model:$model, outdir:$out,
        verdict:(.verdict//"error"), confidence:(.confidence//null),
        findings:((.findings//[])|length),
        high:((.findings//[])|map(select(.severity=="high"))|length),
