@@ -1,0 +1,9 @@
+{
+  "name": "design-taste",
+  "description": "Anti-slop frontend design taste: brief-inference design reads, dial-driven variance/motion/density, plus aesthetic families (minimalist editorial, industrial brutalist, high-end agency), redesign audits, brand-kit and frontend image-generation direction, image-to-code, Stitch DESIGN.md generation, and full-output enforcement. Vendored from leonxlnx/taste-skill (MIT).",
+  "author": {
+    "name": "unattachedgray",
+    "url": "https://github.com/unattachedgray"
+  },
+  "homepage": "https://github.com/leonxlnx/taste-skill"
+}

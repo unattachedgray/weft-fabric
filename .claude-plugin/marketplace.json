@@ -17,7 +17,7 @@
     {
       "name": "catalog",
       "source": "./plugins/catalog",
-      "description": "Index of every skill available in this marketplace. Install on every machine \u2014 even machines that don't have all plugins installed will know what's available, so Claude can suggest installing on demand."
+      "description": "Index of every skill available in this marketplace. Install on every machine — even machines that don't have all plugins installed will know what's available, so Claude can suggest installing on demand."
     },
     {
       "name": "workflow",
@@ -28,6 +28,11 @@
       "name": "frontend",
       "source": "./plugins/frontend",
       "description": "Frontend stack: React + Next.js, TypeScript-based component patterns, Tailwind v4, design systems / UI design tokens, mobile-first design, browser automation, theme application, accessibility/WIG compliance, and text-aware layout via pretext."
+    },
+    {
+      "name": "design-taste",
+      "source": "./plugins/design-taste",
+      "description": "Anti-slop frontend design taste (vendored from leonxlnx/taste-skill, MIT): brief-inference design reads with variance/motion/density dials, aesthetic families (minimalist editorial, industrial brutalist, high-end agency soft), redesign audits, brand-kit + frontend image-gen direction, image-to-code, Stitch DESIGN.md generation, full-output enforcement."
     },
     {
       "name": "backend",

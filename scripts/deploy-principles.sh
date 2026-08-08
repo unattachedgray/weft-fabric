@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # deploy-principles.sh — wire the agent-neutral operating principles + portable skills into
-# every agent CLI on this machine (Claude Code, Codex, Antigravity). Idempotent and reversible;
-# uses symlinks so a repo update propagates to all agents.
+# every agent CLI on this machine (Claude Code, Codex, Antigravity, Cursor). Idempotent and
+# reversible; uses symlinks so a repo update propagates to all agents.
 #
 #   deploy-principles.sh              install
 #   deploy-principles.sh --uninstall  remove only the symlinks this script created
@@ -11,6 +11,7 @@
 # Antigravity reads ~/.gemini/AGENTS.md natively (v1.20.3+); Claude Code pins the shared core with
 # an absolute-path @import written into ~/.claude/CLAUDE.md (never the @~/ form, which silently
 # fails: anthropics/claude-code#8765) — machine-local notes live below the import, untouched.
+# Cursor Agent walks ancestors for AGENTS.md, so ~/AGENTS.md covers every project under $HOME.
 set -euo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 CANON="$REPO/principles/AGENTS.md"
@@ -19,7 +20,7 @@ SKILLS_SRC="$REPO/principles/skills"
 link() { ln -sfn "$1" "$2"; echo "  $2 -> $1"; }
 
 if [ "${1:-}" = "--uninstall" ]; then
-  for f in "$HOME/.codex/AGENTS.md" "$HOME/.gemini/AGENTS.md"; do
+  for f in "$HOME/.codex/AGENTS.md" "$HOME/.gemini/AGENTS.md" "$HOME/AGENTS.md"; do
     [ -L "$f" ] && rm -v "$f" || true
   done
   for d in "$HOME/.codex/skills" "$HOME/.gemini/config/skills"; do
@@ -41,6 +42,7 @@ echo "principles -> agent global-instruction files:"
 mkdir -p "$HOME/.codex" "$HOME/.gemini" "$HOME/.claude"
 link "$CANON" "$HOME/.codex/AGENTS.md"    # Codex (native, no @import)
 link "$CANON" "$HOME/.gemini/AGENTS.md"   # Antigravity (native AGENTS.md)
+link "$CANON" "$HOME/AGENTS.md"           # Cursor Agent (ancestor walk from any $HOME project)
 
 # Claude Code: @import the shared core (absolute path; @~/ silently fails, #8765). Idempotent —
 # add the import once, at the top, preserving any machine-local content already in CLAUDE.md.
