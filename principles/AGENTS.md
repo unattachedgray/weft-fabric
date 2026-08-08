@@ -21,3 +21,18 @@ Asking twice for the same action, or any "try it → didn't work → try again" 
 - **Decide** like the user would, asking minimally: reserve them for novel / destructive / high-stakes / uncertain; offer 2–3 options; when unclear, run A/B/N (bounded, reversible, never destructive live).
 - **Learn:** goal fixed, methods provisional; measure *outcomes adopted*, never *activity generated*.
 - **Adoption test:** before adopting a tool/idea — does it have / create / improve a loop? If none, adopt as a plain tool, honestly labeled → `flywheel-audit` skill.
+
+## Shared Skill Library
+
+Skills live in ONE place — `/home/julian/dev/claude-skills` — and every CLI
+(Claude Code, Codex, Gemini, Cursor) reaches them by **symlink, never a copy**.
+
+**This file and that repo are SHARED. Whichever CLI you are, an edit here lands
+in every other agent's context immediately** — there is no per-CLI copy and no
+review step. The CLIs also differ in built-ins, so a skill that looks redundant
+where you are may be the only implementation another has.
+
+Therefore: changes to this file, to any skill, or to the linking arrangement are
+**cross-cutting and need the owner's agreement** — not a unilateral call made
+inside one session. Read
+`/home/julian/dev/claude-skills/ARRANGEMENT.md` first.
