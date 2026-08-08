@@ -77,16 +77,19 @@ This is the rule most likely to be broken by a well-meaning agent.
 | Built-in browser control | `claude-in-chrome` | — | — | — |
 | Plugin marketplace | yes (`unatt` registered) | no | no | no |
 | Skill discovery | marketplace + `~/.claude/skills` | `~/.codex/skills` | `~/.gemini/config/skills` | `~/.cursor/skills-cursor` — **managed, do not link** |
-| Loads `principles/AGENTS.md` | **yes, automatic** — `@import` in `~/.claude/CLAUDE.md` | **yes, automatic** — `~/.codex/AGENTS.md` symlink | symlink in place, unverified | **NO** — needs a per-project `AGENTS.md` or an explicit opener |
+| Loads `principles/AGENTS.md` | **yes** — `@import` in `~/.claude/CLAUDE.md` | **yes** — `~/.codex/AGENTS.md` symlink | **yes** — `~/.gemini/AGENTS.md` symlink | **yes** — per-project rule (see below) |
 
-Verified empirically on 2026-08-08 by asking each CLI, from a scratch directory
-outside any project, whether the text was in its context. Codex quoted it back.
-Cursor answered "NO". Gemini/Antigravity could not be tested — the symlink at
-`~/.gemini/AGENTS.md` is in place but no `gemini` binary is on PATH, so whether
-the Antigravity app reads it is unconfirmed. Re-test with:
+All four verified empirically on 2026-08-08, each asked from a scratch directory
+outside any project whether the text was in its context. Claude, Codex and
+Antigravity (`agy`) load it automatically and quoted it back. Cursor answered
+"NO" until the per-project rule below was installed, then quoted it too.
+
+**So a fresh agent needs no opener.** It is already there before your first
+message. To re-check after any change:
 
 ```bash
-codex exec --skip-git-repo-check "One line: is there anything in your context about a shared skill library or ARRANGEMENT.md? Quote it, or say NO."
+codex exec --skip-git-repo-check "One line: anything in your context about a shared skill library or ARRANGEMENT.md? Quote it, or say NO."
+agy -p          "One line: ...same question..."
 cursor-agent -p --trust "One line: ...same question..."
 ```
 
