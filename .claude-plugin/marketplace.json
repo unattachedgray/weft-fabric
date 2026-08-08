@@ -10,9 +10,19 @@
   },
   "plugins": [
     {
-      "name": "skill-detectors",
-      "source": "./plugins/skill-detectors",
-      "description": "Two-leg framework that surfaces context-conditional skills automatically. SessionStart hook watches disk state and emits SKILL_SIGNAL markers (offer/route/constrain). UserPromptSubmit hook watches chat content and emits SKILL_SIGNAL_CANDIDATE markers when the user mentions something that may warrant a new detector. Solves the 'I installed it but always forget to invoke it' problem for context-conditional tools."
+      "name": "ai-agents",
+      "source": "./plugins/ai-agents",
+      "description": "Building autonomous AI agents: architecture, tool integration, persistent memory systems, multi-agent orchestration / computer-use patterns, local CLI agent management, refactoring bloated AGENTS.md/CLAUDE.md files, and WALT (Salesforce) for auto-discovering reusable browser-automation tools from any website."
+    },
+    {
+      "name": "automation",
+      "source": "./plugins/automation",
+      "description": "Cross-tool workflow automation: Jira issue/sprint/backlog management, configurable metric watchers with alerts (URLs, shell commands, latency), and Zapier orchestration via MCP + webhooks."
+    },
+    {
+      "name": "business",
+      "source": "./plugins/business",
+      "description": "Business / go-to-market: CEO advisory and strategy, marketing ideas (140 SaaS marketing approaches), App Store Optimization, UX research (interviews, personas, journey mapping), email systems (deliverability, automation, transactional)."
     },
     {
       "name": "catalog",
@@ -20,14 +30,14 @@
       "description": "Index of every skill available in this marketplace. Install on every machine — even machines that don't have all plugins installed will know what's available, so Claude can suggest installing on demand."
     },
     {
-      "name": "workflow",
-      "source": "./plugins/workflow",
-      "description": "Project-agnostic workflow skills: structured development lifecycle, PRD-driven autonomous builds, eval testing, persona switching, multi-step planning, brainstorming, and full-stack app orchestration from natural-language input."
+      "name": "claude-stack",
+      "source": "./plugins/claude-stack",
+      "description": "Anthropic ecosystem + cross-model tools: Claude API / Agent SDK app development (with prompt caching), MCP server building, Gemini CLI for large-context review, parallel Gemini + Codex cross-validation (multi-ai-review), and a bundled monthly-refreshed LLM API pricing reference (llm-api-pricing)."
     },
     {
-      "name": "frontend",
-      "source": "./plugins/frontend",
-      "description": "Frontend stack: React + Next.js, TypeScript-based component patterns, Tailwind v4, design systems / UI design tokens, mobile-first design, browser automation, theme application, accessibility/WIG compliance, and text-aware layout via pretext."
+      "name": "content",
+      "source": "./plugins/content",
+      "description": "Content + document tools: Office documents (docx/pptx/xlsx create+edit), PDF manipulation (extract, create, merge, forms) and structural page-ops (pdf-ops: merge/split/rotate/stamp), document-grounded analysis on local files (notebook, NotebookLM-style FTS5+MCP) or Google NotebookLM (browser-driven), and meme generation via memegen.link."
     },
     {
       "name": "design-taste",
@@ -40,29 +50,24 @@
       "description": "CI/CD, containerization, deployment, GitHub workflow automation, shell scripting. Includes Docker (multi-stage builds, hardening, Compose), Vercel + Next.js deployment, and Bash/Linux terminal patterns."
     },
     {
-      "name": "claude-stack",
-      "source": "./plugins/claude-stack",
-      "description": "Anthropic ecosystem + cross-model tools: Claude API / Agent SDK app development (with prompt caching), MCP server building, Gemini CLI for large-context review, parallel Gemini + Codex cross-validation (multi-ai-review), and a bundled monthly-refreshed LLM API pricing reference (llm-api-pricing)."
+      "name": "engineering",
+      "source": "./plugins/engineering",
+      "description": "Engineering discipline curated from Matt Pocock's skills: deep-module design (codebase-design + design-it-twice), test-driven development, domain modeling with a ubiquitous-language glossary + ADRs, hard-bug diagnosis, throwaway prototyping, architecture-deepening reports, issue triage, and PRD/issue authoring — plus relentless grilling sessions, teaching, and conversation handoff. Small, composable, philosophy-first; TypeScript examples throughout."
     },
     {
-      "name": "ai-agents",
-      "source": "./plugins/ai-agents",
-      "description": "Building autonomous AI agents: architecture, tool integration, persistent memory systems, multi-agent orchestration / computer-use patterns, local CLI agent management, refactoring bloated AGENTS.md/CLAUDE.md files, and WALT (Salesforce) for auto-discovering reusable browser-automation tools from any website."
+      "name": "frontend",
+      "source": "./plugins/frontend",
+      "description": "Frontend stack: React + Next.js, TypeScript-based component patterns, Tailwind v4, design systems / UI design tokens, mobile-first design, browser automation, theme application, accessibility/WIG compliance, and text-aware layout via pretext."
     },
     {
-      "name": "content",
-      "source": "./plugins/content",
-      "description": "Content + document tools: Office documents (docx/pptx/xlsx create+edit), PDF manipulation (extract, create, merge, forms) and structural page-ops (pdf-ops: merge/split/rotate/stamp), document-grounded analysis on local files (notebook, NotebookLM-style FTS5+MCP) or Google NotebookLM (browser-driven), and meme generation via memegen.link."
+      "name": "review",
+      "source": "./plugins/review",
+      "description": "Code review and security audit procedures — for CLIs without built-in review commands"
     },
     {
-      "name": "business",
-      "source": "./plugins/business",
-      "description": "Business / go-to-market: CEO advisory and strategy, marketing ideas (140 SaaS marketing approaches), App Store Optimization, UX research (interviews, personas, journey mapping), email systems (deliverability, automation, transactional)."
-    },
-    {
-      "name": "automation",
-      "source": "./plugins/automation",
-      "description": "Cross-tool workflow automation: Jira issue/sprint/backlog management, configurable metric watchers with alerts (URLs, shell commands, latency), and Zapier orchestration via MCP + webhooks."
+      "name": "skill-detectors",
+      "source": "./plugins/skill-detectors",
+      "description": "Two-leg framework that surfaces context-conditional skills automatically. SessionStart hook watches disk state and emits SKILL_SIGNAL markers (offer/route/constrain). UserPromptSubmit hook watches chat content and emits SKILL_SIGNAL_CANDIDATE markers when the user mentions something that may warrant a new detector. Solves the 'I installed it but always forget to invoke it' problem for context-conditional tools."
     },
     {
       "name": "skill-management",
@@ -70,9 +75,9 @@
       "description": "Discover, create, and propagate Claude Code skills: find-skills (search/install from ecosystem), skill-development (full TDD lifecycle), skill-enhance (propagate a tech across your library)."
     },
     {
-      "name": "engineering",
-      "source": "./plugins/engineering",
-      "description": "Engineering discipline curated from Matt Pocock's skills: deep-module design (codebase-design + design-it-twice), test-driven development, domain modeling with a ubiquitous-language glossary + ADRs, hard-bug diagnosis, throwaway prototyping, architecture-deepening reports, issue triage, and PRD/issue authoring — plus relentless grilling sessions, teaching, and conversation handoff. Small, composable, philosophy-first; TypeScript examples throughout."
+      "name": "workflow",
+      "source": "./plugins/workflow",
+      "description": "Project-agnostic workflow skills: structured development lifecycle, PRD-driven autonomous builds, eval testing, persona switching, multi-step planning, brainstorming, and full-stack app orchestration from natural-language input."
     }
   ]
 }

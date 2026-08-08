@@ -46,6 +46,7 @@ Business / go-to-market: CEO advisory and strategy, marketing ideas (140 SaaS ma
 | `/business:app-store-optimization` | Complete App Store Optimization (ASO) toolkit for researching, optimizing, and tracking mobile app performance on Apple App Store and Google Play Store |
 | `/business:ceo-advisor` | Executive leadership guidance for strategic decision-making, organizational development, and stakeholder management. Includes strategy analyzer, financial scenario modeling, board governance frameworks, and investor relations playbooks. ... |
 | `/business:email-systems` | Email has the highest ROI of any marketing channel. $36 for every $1 spent. Yet most startups treat it as an afterthought - bulk blasts, no personalization, landing in spam folders.  This skill covers transactional email that works, mark... |
+| `/business:soft-skill` | Teaches the AI to design like a high-end agency. Defines the exact fonts, spacing, shadows, card structures, and animations that make a website feel expensive. Blocks all the common defaults that make AI designs look cheap or generic. |
 | `/business:ux-research` | UX research and design including user interviews, usability testing, persona generation, journey mapping, and behavioral research |
 
 ### `catalog`
@@ -81,6 +82,7 @@ Content + document tools: Office documents (docx/pptx/xlsx create+edit), PDF man
 | `/content:pdf` | Comprehensive PDF manipulation toolkit for extracting text and tables, creating new PDFs, merging/splitting documents, and handling forms. When Claude needs to fill in a PDF form or programmatically process, generate, or analyze PDF docu... |
 | `/content:pdf-ops` | Reorder, merge, split, rotate, and stamp PDF pages. |
 | `/content:pptx` | Use this skill any time a .pptx file is involved in any way — as input, output, or both. This includes: creating slide decks, pitch decks, or presentations; reading, parsing, or extracting text from any .pptx file (even if the extracted ... |
+| `/content:unattached-article` | Turn user-provided research, notes, DOCX files, or prior drafts into a newly written, visually rich long-form document for the unattached.me `/doc/` collection and a shorter copy-ready Facebook text derivative at finalization. Use when C... |
 | `/content:xlsx` | Use this skill any time a spreadsheet file is the primary input or output. This means any task where the user wants to: open, read, edit, or fix an existing .xlsx, .xlsm, .csv, or .tsv file (e.g., adding columns, computing formulas, form... |
 
 ### `design-taste`
@@ -107,6 +109,7 @@ CI/CD, containerization, deployment, GitHub workflow automation, shell scripting
 
 | Skill | Description |
 |---|---|
+| `/devops:facebook-comment-reader` | Analyze local `facebook-rendered-comments/v1` JSON exports from the Browser Tunnel extension. Use when Codex needs to validate, filter, classify, summarize, compare, or turn exported Facebook comments and attached-media metadata into doc... |
 | `/devops:firefox-control` | Inspect and interact with the user's explicitly armed Firefox tab through Weft's local browser tunnel (looking_glass.py + the Browser Tunnel extension). Use when Claude must view an authenticated page as rendered in Firefox, capture its ... |
 | `/devops:sudo-run` | Run commands that need sudo (or any interactive password) by spawning a real terminal window for the password prompt, logging all output to a file, and watching for completion. Built for native Ubuntu Linux (ptyxis, gnome-terminal, x-ter... |
 | `/devops:vercel-deployment` | Expert knowledge for deploying to Vercel with Next.js Use when: vercel, deploy, deployment, hosting, production. |
@@ -138,6 +141,7 @@ Frontend stack: React + Next.js, TypeScript-based component patterns, Tailwind v
 
 | Skill | Description |
 |---|---|
+| `/frontend:browser` | Browser automation via a Chrome bridge extension. Use when a task means interacting with a website from Claude Code — tab management, screenshots, form filling, data extraction, device emulation, network capture (72 commands across 12 ca... |
 | `/frontend:mobile-design` | Mobile-first design thinking and decision-making for iOS and Android apps. Touch interaction, performance patterns, platform conventions. Teaches principles, not fixed values. Use when building React Native, Flutter, or native mobile apps. |
 | `/frontend:pretext-layout` | Text-aware frontend design and verification. Use when building, reviewing, or testing ANY web frontend — applies @chenglou/pretext text-measurement principles to prevent text overflow, verify layout fit, and design container-aware typogr... |
 | `/frontend:theme-factory` | Toolkit for styling artifacts with a theme. These artifacts can be slides, docs, reportings, HTML landing pages, etc. There are 10 pre-set themes with colors/fonts that you can apply to any artifact that has been creating, or can generat... |

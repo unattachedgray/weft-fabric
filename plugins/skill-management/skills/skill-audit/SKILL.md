@@ -36,9 +36,20 @@ Everything else is filler, however well written.
 - **Teaches a language, framework or tool the model knows.** "JavaScript has 7
   primitive types", install commands, KISS/DRY/YAGNI. Length is the tell: a
   400–850 line SKILL.md with no bundled files is a tutorial, not a tool.
-- **Shadows a Claude Code built-in.** A skill named `security-review` or
-  `code-quality` competes with the shipped command of the same name and you
-  get the worse implementation. Check the current built-in list first.
+- **Shadows a built-in *on every CLI that uses this repo*.** This is the trap.
+  This library is shared by Claude Code, Codex, Gemini/Antigravity and Cursor,
+  and they do not have the same features. `security-review` and `code-quality`
+  duplicate Claude Code commands — but for Codex and Gemini they are the ONLY
+  implementation, so deleting them is a loss. A skill is only redundant if it
+  is redundant everywhere. When it is conditional, keep it and mark it:
+
+  ```yaml
+  clis: codex, gemini, cursor
+  clis-why: Claude Code ships its own /security-review; this covers the rest.
+  ```
+
+  (This rule exists because the 2026-08-08 audit deleted three skills on
+  Claude-only reasoning and had to restore them.)
 - **Superseded by a sibling.** Look for `-v1` suffixes and near-identical
   section headings across skills in one plugin.
 - **Never invoked.** See "Which skills are actually used" below.
@@ -130,6 +141,28 @@ rotted:
   no push needed for them to take effect, though push anyway.
 - Record what went and why in the commit. The next audit should not have to
   re-derive the reasoning.
+
+## Every CLI links the same files
+
+There must be exactly one copy of any skill — the repo's — and every CLI
+reaches it by symlink. Copies drift silently and are unbacked:
+
+```bash
+# any CLI holding a COPY instead of a link
+for d in ~/.claude/skills ~/.codex/skills ~/.gemini/config/skills; do
+  for f in "$d"/*/; do [ -L "${f%/}" ] || echo "COPY  $f"; done
+done
+
+# a copy that duplicates a repo skill under a different name
+md5sum ~/.codex/skills/*/SKILL.md plugins/*/skills/*/SKILL.md |
+  sort | uniq -w32 -d
+```
+
+On 2026-08-08 Codex held 11 copies: 8 were byte-identical duplicates of repo
+skills under renamed directories (`taste-skill` = `design-taste-frontend`), and
+3 existed nowhere else at all. Duplicates became symlinks; the unique ones were
+absorbed into the repo. If a copy has genuinely drifted, decide which side is
+right before relinking — do not assume the repo is newer.
 
 ## Related
 

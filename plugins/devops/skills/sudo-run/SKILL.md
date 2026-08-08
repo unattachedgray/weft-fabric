@@ -1,6 +1,8 @@
 ---
 name: sudo-run
 description: Run commands that need sudo (or any interactive password) by spawning a real terminal window for the password prompt, logging all output to a file, and watching for completion. Built for native Ubuntu Linux (ptyxis, gnome-terminal, x-terminal-emulator) with WSL/Windows fallback. Use whenever a task needs sudo or interactive credentials.
+clis: claude, codex, gemini
+clis-why: Spawns a real terminal for the password prompt — works anywhere with a desktop session.
 ---
 
 # sudo-run

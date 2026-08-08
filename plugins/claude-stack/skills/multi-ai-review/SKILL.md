@@ -1,6 +1,8 @@
 ---
 name: multi-ai-review
 description: Parallel cross-validation of an important judgment by Gemini and Codex CLI. Use when the user asks for a "second opinion", "cross review", "external review", "peer review", "multi-AI review", or expresses doubt about a Claude-only judgment on architectural / design / long-form decisions. Skip for routine coding, small fixes, or anything involving secrets or PII.
+clis: claude, codex, gemini
+clis-why: Cross-checks a judgment with the OTHER CLIs, so it assumes they are installed.
 ---
 
 # Multi-AI Review — parallel external-model cross-validation

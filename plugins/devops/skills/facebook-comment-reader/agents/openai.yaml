@@ -1,0 +1,4 @@
+interface:
+  display_name: "Facebook Comment Export Analyzer"
+  short_description: "Analyze local Facebook comment exports"
+  default_prompt: "Use $facebook-comment-reader to analyze this local Facebook comment export and produce a source-grounded document."

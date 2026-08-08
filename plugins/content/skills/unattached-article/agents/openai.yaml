@@ -1,0 +1,4 @@
+interface:
+  display_name: "Unattached Article"
+  short_description: "Write and verify visual Unattached investigations"
+  default_prompt: "Use $unattached-article to turn my research into a newly written, visually rich Unattached document."
