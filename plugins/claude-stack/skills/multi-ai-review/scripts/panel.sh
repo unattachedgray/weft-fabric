@@ -82,3 +82,23 @@ for m in $MEMBERS; do jq -c --arg m "$m" '{member:$m} + (.//{verdict:"error"})' 
 
 echo "--- $OUT/panel.json ---" >&2
 jq '{verdicts,split,high}' "$OUT/panel.json" >&2
+
+# ── ledger ──────────────────────────────────────────────────────────────────
+# One row per member per run, appended to ~/.claude-skills-panel/ledger.jsonl.
+# `outcome` is intentionally left null: nothing here records whether a finding
+# was TRUE. That is scored afterwards by the generator, against evidence, via
+# `panel-score.sh`. Counting raw findings would reward whichever member is most
+# talkative, which is the failure mode this whole harness exists to avoid.
+LEDGER_DIR="${PANEL_LEDGER_DIR:-$HOME/.claude-skills-panel}"; mkdir -p "$LEDGER_DIR"
+RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
+KIND="${PANEL_KIND:-unclassified}"
+for m in $MEMBERS; do
+  jq -c --arg run "$RUN_ID" --arg m "$m" --arg kind "$KIND" --arg out "$OUT" \
+     '{run:$run, ts:(now|todate), kind:$kind, member:$m, outdir:$out,
+       verdict:(.verdict//"error"), confidence:(.confidence//null),
+       findings:((.findings//[])|length),
+       high:((.findings//[])|map(select(.severity=="high"))|length),
+       claims:((.findings//[])|map(.claim)), outcome:null}' \
+     <"$OUT/$m.json" >>"$LEDGER_DIR/ledger.jsonl"
+done
+echo "ledger: $LEDGER_DIR/ledger.jsonl  run=$RUN_ID  (score it with panel-score.sh $RUN_ID)" >&2

@@ -145,6 +145,52 @@ Write the prompt to point at real paths rather than pasting content, e.g.
 - **`cursor-agent -p` hard-fails in an untrusted directory** without `--trust`,
   and is the only one of the four that can write files with no permission flag.
 
+## Learning which reviewer is good at what
+
+The panel records itself, so routing improves instead of staying a guess.
+
+```bash
+PANEL_KIND=script-review scripts/panel.sh brief.md      # tag the run
+scripts/panel-score.sh --pending                        # what awaits scoring
+scripts/panel-score.sh <run> <member> confirmed|rejected|mixed "why"
+scripts/panel-score.sh --report [kind]                  # confirmed-rate per member
+```
+
+Three properties make this a flywheel rather than a leaderboard:
+
+**Scoring is manual and post-hoc.** `panel.sh` writes `outcome:null` on purpose.
+A finding counts only after someone checked it against evidence. Ranking by raw
+finding count would reward whichever member talks most — and on 2026-08-08 the
+two most confident claims in an audit were both wrong, while a quiet structural
+observation was the one that mattered.
+
+**The report reorders attention, never membership.** A low-scoring member is
+read last, not evicted. The measured value of a panel is the *lone* finding
+nobody else had — one 6.7B model uniquely solved 26 bugs no other model touched
+([2510.21513](https://arxiv.org/abs/2510.21513)) — and dropping members is
+precisely how you lose it. This is the governor; without it the ledger would
+re-create the majority filter the harness exists to avoid.
+
+**The ranking is perishable.** It is per-`kind`, needs ~12 scored rows per
+member to mean anything, and must be re-checked after any CLI version bump.
+The report says so itself when the sample is thin.
+
+### Worked example — the first two scored runs
+
+Run 1 asked whether every skill was reachable by every CLI that needed it. All
+three said *disagree*; the top finding was correct and caught three skills
+tagged `clis: codex, gemini` that were linked nowhere.
+
+Run 2 (`kind=script-review`) asked whether `install-cursor-rule.sh` was safe to
+re-run. Codex and Cursor both found that `ln -sfn` force-replaces whatever is at
+the target path, so a project with its own authored rule of the same name would
+lose it silently. Verified, guard added, and the guard tested against a real
+file. Antigravity returned three findings, none of them that one — scored
+`mixed`, which is the honest record and the beginning of a routing signal rather
+than a verdict about the model.
+
+Two runs, two real defects, both in code written earlier the same day.
+
 ## Cost
 
 Several minutes of wall clock and real tokens across three vendors. It earned

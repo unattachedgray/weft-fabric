@@ -32,6 +32,12 @@ for t in "${targets[@]}"; do
   link="$t/.cursor/rules/shared-skill-library.mdc"
   if [ -L "$link" ] && [ "$(readlink "$link")" = "$CANON" ]; then
     echo "  ok:   $t"
+  elif [ -e "$link" ] && [ ! -L "$link" ]; then
+    # Refuse to clobber a real file. `ln -sfn` force-replaces whatever is at the
+    # path, so a project that had authored its own rule of the same name would
+    # have lost it silently. Found by a cross-architecture panel run, 2026-08-08.
+    echo "  SKIP: $t — $link exists and is a regular file, not our symlink." >&2
+    echo "        Move or delete it, then re-run." >&2
   else
     ln -sfn "$CANON" "$link"
     echo "  linked: $t"
