@@ -63,8 +63,13 @@ else
   echo "  created $CC -> $IMPORT"
 fi
 
-echo "portable skills -> codex + antigravity skills dirs (Claude already has them):"
-for d in "$HOME/.codex/skills" "$HOME/.gemini/config/skills"; do
+# "Claude already has them" was false. Claude Code only sees a skill that is
+# installed as a plugin or symlinked into ~/.claude/skills, and this script did
+# neither — so flywheel-audit was unreachable from Claude Code while the
+# AGENTS.md loaded into EVERY Claude session ended by pointing at it. Claude is
+# now linked alongside the other two.
+echo "portable skills -> claude + codex + antigravity skills dirs:"
+for d in "$HOME/.claude/skills" "$HOME/.codex/skills" "$HOME/.gemini/config/skills"; do
   mkdir -p "$d"
   for sk in "$SKILLS_SRC"/*/; do
     link "$sk" "$d/$(basename "$sk")"

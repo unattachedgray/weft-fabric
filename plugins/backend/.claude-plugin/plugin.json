@@ -1,8 +1,0 @@
-{
-  "name": "backend",
-  "description": "Backend: Node.js/Express/TypeScript microservices with layered architecture, schema design, third-party API integration, type-level TypeScript, JavaScript fundamentals, Bun runtime.",
-  "author": {
-    "name": "unattachedgray",
-    "url": "https://github.com/unattachedgray"
-  }
-}

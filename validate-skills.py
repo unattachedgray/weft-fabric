@@ -101,7 +101,13 @@ def main(argv: list[str]) -> int:
     do_fix = "--fix" in argv
     files = [a for a in argv if a != "--fix"]
     targets = [a for a in files if os.path.basename(a) == "SKILL.md"] if files \
-        else sorted(glob.glob(os.path.join(ROOT, "plugins", "*", "skills", "*", "SKILL.md")))
+        else sorted(
+            # ** so a skill that bundles sub-documents is still reached, and
+            # principles/skills/* too — the old plugins/*/skills/*/SKILL.md glob
+            # silently skipped three real files.
+            glob.glob(os.path.join(ROOT, "plugins", "*", "skills", "**", "SKILL.md"), recursive=True)
+            + glob.glob(os.path.join(ROOT, "principles", "skills", "*", "SKILL.md"))
+        )
     failures, fixedn = 0, 0
     for path in targets:
         rel = os.path.relpath(path, ROOT)

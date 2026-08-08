@@ -1,8 +1,0 @@
-{
-  "name": "ai-ml",
-  "description": "LangChain for LLM-powered apps: agents, chains, RAG, 500+ integrations across providers (OpenAI/Anthropic/Google), tool calling, memory management, vector stores.",
-  "author": {
-    "name": "unattachedgray",
-    "url": "https://github.com/unattachedgray"
-  }
-}
