@@ -11,6 +11,14 @@ Before asking the user to do anything by hand (run, click, paste, rebuild, look 
 
 Asking twice for the same action, or any "try it → didn't work → try again" loop, means a missing harness — stop and build it. Loop until concrete runtime verification proves the goal is done. The human belongs at the *governor* gate, never in the *iteration* loop.
 
+**An unvalidated harness is worse than none — it spins the loop confidently in the wrong direction.** Before trusting a reading, above all a *null* one → `diagnostic-loop` skill.
+- **Prove the sensor fires** on a real instance, reached the way the real one is reached. A synthetic stimulus that skips the real code path validates nothing.
+- **A null is inadmissible** without a liveness check *in that same run*. Never let `x || {}` turn "instrument missing" into "nothing happened".
+- **Preconditions are aborts, not care** — encode them so a violated run refuses to report.
+- **Detect the phenomenon, not your hypothesis.** An instrument that can only confirm the current guess can never bisect; you will just guess again at higher resolution.
+- **Localize, then change. Never use a code edit as a probe.** A fix for an un-localized cause is a speculative edit with real blast radius: it can add regressions, and it destroys attribution for every later reading. If a change does not kill the symptom, revert it unless it stands on its own evidence.
+- **Set a stop rule** before starting: after N failed rounds, change *approach* — do not repeat the same shape more sensitively. Say up front if the loop will occupy the user's screen, keyboard, or machine.
+
 ## The Flywheel
 
 **Find the latent feedback loop and engineer it to spin itself** — bounded, governed compounding. Spine: **sense → decide → act → learn**.
