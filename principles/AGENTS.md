@@ -46,3 +46,19 @@ Therefore: changes to this file, to any skill, or to the linking arrangement are
 **cross-cutting and need the owner's agreement** — not a unilateral call made
 inside one session. Read
 `/home/julian/dev/claude-skills/ARRANGEMENT.md` first.
+
+## Vocabulary
+
+The user's words for their own things. Machine-specific paths, ports and deploy
+commands stay out of this file — they live in each machine's local notes.
+
+- **"blog" / "docs"** = unattached.me. Three distinct kinds, never interchangeable:
+  - **"article"** = a long-form document at `unattached.me/doc/<slug>` → the
+    `unattached-article` skill, which is linked into **Codex only** today.
+  - **"blog post"** = a main-page post imported from the user's Facebook.
+  - **"news"** = unattached.me/news.
+- **"armed tab" / "I armed X"** = a live, logged-in tab the user armed in Firefox
+  Developer Edition → the `firefox-control` skill. Never substitute a headless or
+  fresh browser; the point is **their** session, which differs from a clean one.
+- **"weft"** = the agentic harness at `~/dev/weft`; its own docs are `~/dev/weft/CLAUDE.md`.
+- **"dsh"** = DeepSeek Harness at `~/dev/deepseek-harness`; web UI on `127.0.0.1:3080`.
