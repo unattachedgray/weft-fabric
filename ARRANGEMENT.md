@@ -176,9 +176,11 @@ files, resolves symlinked entries, and does not recurse. Verified 2026-08-16: a
 real `dsh` run listed two skills symlinked into a scratch project, `ste` included,
 so the extra `clis:` frontmatter does not break its parser.
 
-Prefer `customSkillDirs` over per-skill symlinks here. It points at a whole
-`plugins/<plugin>/skills` folder, so a new skill in that folder appears with no
-relinking. Nothing else in this library has that property.
+Wired on 2026-08-16 through `~/.dsh/cordis.patch.yml`, which points
+`customSkillDirs` at `principles/skills` and `plugins/devops/skills`. Prefer that
+over per-skill symlinks here: it points at a whole folder, so a new skill in it
+appears with no relinking. Nothing else in this library has that property. A real
+session lists all six skills from those two folders.
 
 `dsh` has **no plugin marketplace for skills and no output styles**. Do not try
 to register the `unatt` marketplace with it.
@@ -283,6 +285,11 @@ Do not "clean up" these without understanding them:
 - **`validate-skills.py` globs `plugins/*/skills/**/SKILL.md` plus
   `principles/skills/*`.** The old non-recursive glob silently skipped three
   real files.
+- **`validate-skills.py` parses the frontmatter with PyYAML, not just regex.**
+  The regex checks passed `firefox-control`, whose unquoted `clis-why` contained
+  `": "`. Claude Code loaded it anyway; dsh's stricter `yaml@2.9.0` rejected the
+  file and dropped the skill, and nothing said so. A frontmatter check that never
+  parses YAML cannot see what the strict loaders see.
 - **The marketplace is registered against the local path**, not the GitHub
   remote. That is deliberate: edits are live without a push cycle.
 - **The remote holds history this clone once lost.** The local clone was

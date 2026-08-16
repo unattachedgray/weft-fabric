@@ -13,18 +13,33 @@ problems and re-stages**, and only **rejects** what it can't fix. Run manually:
     python3 validate-skills.py --fix       # auto-fix what it can, in place
     python3 validate-skills.py --fix a/SKILL.md b/SKILL.md   # specific files (the hook)
 
+Frontmatter is also parsed with a real YAML loader, because the regex checks alone
+passed a file that dsh's yaml@2.9.0 rejected outright (firefox-control, 2026-08-16:
+an unquoted `clis-why` whose text contained ": ").
+
 Auto-fixes: add derived frontmatter (name = dir, description from the H1 + first
-line); slugify a non-conformant `name`; truncate a >1024-char description.
+line); slugify a non-conformant `name`; truncate a >1024-char description; quote a
+top-level value containing ": ".
 Unfixable (→ reject): an empty file with nothing to derive a description from.
-stdlib only.
+stdlib only, except PyYAML when available — see _yaml_problems.
 """
 from __future__ import annotations
 import os, re, sys, glob
+
+try:                        # the strict parse the CLI loaders actually perform
+    import yaml
+except ModuleNotFoundError:  # keeps the hook usable on a bare interpreter
+    yaml = None
 
 ROOT = os.path.dirname(os.path.realpath(__file__))
 SLUG = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
 FM = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 STRIP = "﻿ \t\r\n"
+# A top-level unquoted scalar whose value contains ": " — YAML reads the second
+# colon as a nested mapping and the whole file is rejected. dsh (yaml@2.9.0) skipped
+# firefox-control for exactly this on 2026-08-16, while the regex checks below
+# passed it. Quoting the value is the fix.
+UNQUOTED_COLON = re.compile(r"""^([A-Za-z0-9_-]+):[ \t]+(?!["'|>&*\[{])(.*:[ \t].*)$""")
 
 def _esc(d: str) -> str:
     return re.sub(r"\s+", " ", d).strip().replace('"', "'")
@@ -37,6 +52,25 @@ def _derive_desc(body: str) -> str:
     desc = core if (len(core) >= 80 or not body1) else f"{core} — {body1}"
     return _esc(desc)[:1020].rstrip()
 
+def _quote(value: str) -> str:
+    return '"' + value.replace('"', "'") + '"'
+
+def _yaml_problems(fm: str) -> list[str]:
+    """Report frontmatter a strict YAML loader would reject.
+
+    PyYAML when present, otherwise the one construct that has actually bitten us.
+    The fallback is narrower, never silent: main() prints which mode ran.
+    """
+    if yaml is not None:
+        try:
+            yaml.safe_load(fm)
+        except yaml.YAMLError as e:
+            first = str(e).split("\n")[0].strip()
+            return [f"frontmatter is not valid YAML ({first}) — quote any value containing ': '"]
+        return []
+    bad = [m.group(1) for m in (UNQUOTED_COLON.match(l) for l in fm.split("\n")) if m]
+    return [f"`{k}:` value contains ': ' unquoted — a strict YAML loader rejects the file" for k in bad]
+
 def check(path: str) -> list[str]:
     name_dir = os.path.basename(os.path.dirname(os.path.realpath(path)))
     try:
@@ -47,6 +81,7 @@ def check(path: str) -> list[str]:
     if not m:
         return ["missing YAML frontmatter delimited by --- (must be the first content)"]
     fm, probs = m.group(1), []
+    probs += _yaml_problems(fm)
     nm = re.search(r"(?m)^name:\s*(.+?)\s*$", fm)
     if not nm:
         probs.append("frontmatter missing `name:`")
@@ -90,6 +125,10 @@ def fix(path: str) -> tuple[bool, list[str]]:
             cur = re.sub(r"^\s*description:\s*", "", fm_lines[di]).strip().strip("\"'")
             if len(cur) > 1024:
                 fm_lines[di] = f'description: "{_esc(cur)[:1020].rstrip()}…"'
+        for i, line in enumerate(fm_lines):
+            um = UNQUOTED_COLON.match(line)
+            if um:
+                fm_lines[i] = f"{um.group(1)}: {_quote(um.group(2).strip())}"
         new = "---\n" + "\n".join(fm_lines) + "\n---\n" + body
 
     if new != raw:
@@ -128,7 +167,9 @@ def main(argv: list[str]) -> int:
         print(f"\n✗ {failures} unfixable problem(s) across {n} file(s).", file=sys.stderr)
         return 1
     msg = f"✓ {n} SKILL.md conform" + (f" ({fixedn} auto-fixed)" if fixedn else "")
-    print(msg + " to the cross-CLI Agent-Skills standard.")
+    mode = f"PyYAML {yaml.__version__}" if yaml is not None \
+        else "no PyYAML — narrow fallback check only, install it for full coverage"
+    print(msg + f" to the cross-CLI Agent-Skills standard. [YAML: {mode}]")
     return 0
 
 if __name__ == "__main__":
