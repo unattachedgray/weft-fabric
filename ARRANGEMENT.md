@@ -40,6 +40,7 @@ Remote: `github.com/unattachedgray/claude-skills`
 ```
 /home/julian/dev/claude-skills/
 ├── plugins/<plugin>/skills/<name>/SKILL.md     the skills
+├── plugins/<plugin>/skills/<name>/output-styles/*.md   Claude-only output styles
 ├── principles/AGENTS.md                        the shared operating principles
 └── principles/skills/<name>/SKILL.md           portable skills for every CLI
 
@@ -89,6 +90,7 @@ This is the rule most likely to be broken by a well-meaning agent.
 | Built-in browser control | `claude-in-chrome` | — | — | — |
 | Plugin marketplace | yes (`unatt` registered) | no | no | no |
 | Skill discovery | marketplace + `~/.claude/skills` | `~/.codex/skills` | `~/.gemini/config/skills` | `~/.cursor/skills-cursor` — **managed, do not link** |
+| Output styles | yes — `~/.claude/output-styles` | — | — | — |
 | Loads `principles/AGENTS.md` | **yes** — `@import` in `~/.claude/CLAUDE.md` | **yes** — `~/.codex/AGENTS.md` symlink | **yes** — `~/.gemini/AGENTS.md` symlink | **yes** — per-project rule (see below) |
 
 All four verified empirically on 2026-08-08, each asked from a scratch directory
@@ -155,6 +157,18 @@ copies there are Cursor's to manage, not drift for us to "fix".
 If this library should reach Cursor, do it through a per-project `AGENTS.md`
 rather than by writing into that directory. Ask the owner first; it is not
 wired today and that may be deliberate.
+
+### Output styles are Claude-only, and they live beside their skill
+
+`~/.claude/output-styles/*.md` is a Claude Code feature the other three do not
+have. A style ships next to the skill that documents it — `ste-partial.md` sits
+under `plugins/content/skills/ste/` — because the style ends by pointing its
+reader at that skill for the word list and worked examples. Two homes means one
+drifts from the other.
+
+`scripts/deploy-output-styles.sh`, run by `bootstrap.sh`, symlinks them into
+`~/.claude/output-styles/`. *Selecting* one stays machine-local: `/output-style`,
+stored as `outputStyle` in `~/.claude/settings.json`. Available is not active.
 
 ### The tunnel is the load-bearing one
 
