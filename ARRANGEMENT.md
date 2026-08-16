@@ -47,6 +47,11 @@ Remote: `github.com/unattachedgray/claude-skills`
 ~/.claude/skills/<name>   ─┐
 ~/.codex/skills/<name>    ─┼─► symlinks into the above. NEVER copies.
 ~/.gemini/config/skills/  ─┘
+
+~/.codex/AGENTS.md  ~/.gemini/AGENTS.md  ~/AGENTS.md  ~/.dsh/AGENTS.md
+                          └─► all symlinks to principles/AGENTS.md (one inode).
+                              Claude Code is the exception: ~/.claude/CLAUDE.md
+                              is a real file that @imports it.
 ```
 
 **A copy is a bug.** It drifts from the repo silently and it is unbacked. This
@@ -157,6 +162,29 @@ copies there are Cursor's to manage, not drift for us to "fix".
 If this library should reach Cursor, do it through a per-project `AGENTS.md`
 rather than by writing into that directory. Ask the owner first; it is not
 wired today and that may be deliberate.
+
+### DeepSeek Harness (`dsh`) is the fifth reader (2026-08-16)
+
+`~/.dsh/AGENTS.md` is a symlink to `principles/AGENTS.md`, so `dsh` loads the
+shared principles exactly as Codex and Antigravity do. The filename is fixed;
+`$DSH_HOME` moves the directory.
+
+Its skill roots, in the order it scans them, are `<projectRoot>/.dsh/skills`,
+`<projectRoot>/.agents/skills`, the configured `customSkillDirs`, `~/.dsh/skills`
+and `~/.agents/skills`. It accepts `<name>/SKILL.md` bundles and flat `<name>.md`
+files, resolves symlinked entries, and does not recurse. Verified 2026-08-16: a
+real `dsh` run listed two skills symlinked into a scratch project, `ste` included,
+so the extra `clis:` frontmatter does not break its parser.
+
+Prefer `customSkillDirs` over per-skill symlinks here. It points at a whole
+`plugins/<plugin>/skills` folder, so a new skill in that folder appears with no
+relinking. Nothing else in this library has that property.
+
+`dsh` has **no plugin marketplace for skills and no output styles**. Do not try
+to register the `unatt` marketplace with it.
+
+Open question: the `clis:` frontmatter vocabulary has no `dsh` value, so
+`clis: claude` does not exclude a skill from any folder `dsh` is pointed at.
 
 ### Output styles are Claude-only, and they live beside their skill
 

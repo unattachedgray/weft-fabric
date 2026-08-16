@@ -34,6 +34,8 @@ Asking twice for the same action, or any "try it → didn't work → try again" 
 
 Skills live in ONE place — `/home/julian/dev/claude-skills` — and every CLI
 (Claude Code, Codex, Gemini, Cursor) reaches them by **symlink, never a copy**.
+DeepSeek Harness (`dsh`) reads this file too, through `~/.dsh/AGENTS.md`; its
+skills are not wired yet.
 
 **This file and that repo are SHARED. Whichever CLI you are, an edit here lands
 in every other agent's context immediately** — there is no per-CLI copy and no
