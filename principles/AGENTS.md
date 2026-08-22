@@ -41,7 +41,7 @@ Asking twice for the same action, or any "try it → didn't work → try again" 
 
 ### Closing a loop — what that actually takes
 
-- **Docs drift silently — nothing fails when they go stale.** When you change what a project *does*, update the page that says what it does, in the same commit. Between times, offer at a natural boundary rather than waiting to be asked: *"the docs are behind on X — want them brought current?"* Measured: one day's work left a benchmark's own documentation describing a suite that asked the owner questions it no longer asks.
+- **Check the docs before every commit.** Not "when behaviour changes" — that is a judgement, and judgements get skipped. Make it the mechanical step before `git commit`: does any page now describe this differently? If yes it goes in the same commit; if no it costs two seconds. Docs go stale silently because nothing fails when they do — no test breaks, no build fails, and the next reader simply believes them. Measured: one day's work left a benchmark's own documentation describing a suite that queued questions for the owner weeks after it stopped queueing any.
 - **Trace the write.** A loop is not closed because a decision was *recorded*. Follow the value to the line that reads it. Twelve settings decisions sat answered and marked `changed: true` while nothing in the read path ever opened that file.
 - **A question to a person is often a measurement question in costume.** Once they can state their policy, what is left is evidence — and evidence is code's job. Asking someone to arbitrate noise spends the one input only they have.
 - **Thin evidence is a request for another measurement, not a question.** If the harness can run again, it should.
