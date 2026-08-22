@@ -30,6 +30,41 @@ Asking twice for the same action, or any "try it → didn't work → try again" 
 - **Learn:** goal fixed, methods provisional; measure *outcomes adopted*, never *activity generated*.
 - **Adoption test:** before adopting a tool/idea — does it have / create / improve a loop? If none, adopt as a plain tool, honestly labeled → `flywheel-audit` skill.
 
+## Deterministic Code Over A Model, When The Rule Can Be Written Down
+
+**If you can derive the rule from real measurements, write the rule.** A model
+call is the right tool for open-ended input — natural language, judgment, novel
+synthesis. It is the wrong tool for a decision you already know how to make.
+
+The test is one question: *could I state this decision as a rule from what I
+measured?* If yes, it belongs in code — deterministic, inspectable, reproducible,
+free to run, and identical on the thousandth call.
+
+Reach for code especially when the decision:
+
+- **runs unattended or in a loop** — a model in a loop is nondeterminism compounding
+- **must be reproducible** — a score, a threshold, an eviction order, a scheduling choice
+- **is cheap to check and expensive to get wrong** — a guard, a precondition, a refusal
+- **has a measurable input** — free VRAM, idle seconds, token rates, exit codes
+
+Reach for a model when the input genuinely resists a rule: prose, intent,
+ambiguity, or a space too large to enumerate.
+
+**The two compose, in one direction.** Use a model to *find* the rule — that is
+what it is good at — then bank the rule as code and stop paying for the
+derivation. An LLM that decides the same thing the same way every day is a rule
+that has not been written down yet. This is the Flywheel's *raise the gain* lever
+applied to decisions specifically, and it is the usual reason a loop is slow,
+costly, or subtly inconsistent.
+
+Two corollaries worth stating plainly:
+
+- **A deterministic checker beats another opinion.** A linter, a test, or a script
+  has errors uncorrelated with yours by construction; a second model's are not.
+- **Warranted, not dogmatic.** Do not hand-roll a brittle parser to avoid a model
+  call that would do it properly. The principle is about decisions you have
+  measured, not about avoiding models on principle.
+
 ## Shared Skill Library
 
 Skills live in ONE place — `/home/julian/dev/claude-skills` — and every CLI
@@ -60,5 +95,11 @@ commands stay out of this file — they live in each machine's local notes.
 - **"armed tab" / "I armed X"** = a live, logged-in tab the user armed in Firefox
   Developer Edition → the `firefox-control` skill. Never substitute a headless or
   fresh browser; the point is **their** session, which differs from a clean one.
+- **"check reddit" / "what does reddit say" / "your reddit skill"** = practitioner
+  research on Reddit → the `reddit-research` skill, which reads through an armed
+  tab. Reddit 403s every direct route (curl, `.json`, old.reddit, text proxies)
+  and the web-search tool cannot crawl reddit.com, so a web search is never a
+  substitute. If no tab is armed, say so and ask for one; do not quietly fall
+  back to HN or blog posts and call it Reddit.
 - **"weft"** = the agentic harness at `~/dev/weft`; its own docs are `~/dev/weft/CLAUDE.md`.
 - **"dsh"** = DeepSeek Harness at `~/dev/deepseek-harness`; web UI on `127.0.0.1:3080`.
