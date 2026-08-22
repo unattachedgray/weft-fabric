@@ -1,0 +1,227 @@
+#!/usr/bin/env python3
+"""session-recall — search every past CLI session, across every project silo.
+
+WHY this exists (2026-08-18): Claude Code keys memory AND transcripts by working
+directory. A body of work split across two directories therefore has two
+disjoint memories, and a session started in the "wrong" one begins blind. That
+day a session ran for hours on the wrong surface of unattached.me because the
+site's accumulated context lived in the `weft` silo while the cwd was
+`fb-unattached`. Nothing was corrupted and no rule was broken — the knowledge
+was simply unreachable.
+
+Memory files are an INDEX, not the corpus. The corpus is the transcripts, and
+until now nothing could read them. This makes under-memoized degrade to "slower"
+instead of "ignorant".
+
+Stdlib only, streaming, no index to keep fresh.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import sys
+from datetime import datetime
+from pathlib import Path
+
+ROOT = Path(os.environ.get("CLAUDE_PROJECTS_DIR", Path.home() / ".claude" / "projects"))
+
+
+def silo_label(d: Path) -> str:
+    """`-home-julian-dev-weft` → `~/dev/weft` (the cwd it was keyed from)."""
+    n = d.name
+    if not n.startswith("-"):
+        return n
+    p = "/" + n[1:].replace("-", "/")
+    home = str(Path.home())
+    return ("~" + p[len(home):]) if p.startswith(home) else p
+
+
+def iter_transcripts(silo: str | None = None):
+    if not ROOT.is_dir():
+        return
+    for d in sorted(ROOT.iterdir()):
+        if not d.is_dir():
+            continue
+        if silo and silo.lower() not in d.name.lower() and silo.lower() not in silo_label(d).lower():
+            continue
+        for f in d.glob("*.jsonl"):
+            yield d, f
+
+
+def text_of(entry: dict) -> str:
+    """Flatten one transcript entry to searchable text."""
+    m = entry.get("message")
+    if isinstance(m, str):
+        return m
+    if isinstance(m, dict):
+        c = m.get("content")
+        if isinstance(c, str):
+            return c
+        if isinstance(c, list):
+            out = []
+            for part in c:
+                if isinstance(part, str):
+                    out.append(part)
+                elif isinstance(part, dict):
+                    # text blocks, and tool_use/tool_result payloads
+                    if isinstance(part.get("text"), str):
+                        out.append(part["text"])
+                    elif isinstance(part.get("content"), str):
+                        out.append(part["content"])
+                    elif part.get("name"):
+                        out.append(str(part.get("name")))
+            return "\n".join(out)
+    if isinstance(entry.get("content"), str):
+        return entry["content"]
+    return ""
+
+
+def snippet(text: str, terms: list[str], width: int = 150) -> str:
+    low = text.lower()
+    i = min((low.find(t) for t in terms if t in low), default=-1)
+    if i < 0:
+        return ""
+    s = max(0, i - width // 3)
+    out = re.sub(r"\s+", " ", text[s:s + width]).strip()
+    return ("…" if s else "") + out
+
+
+def cmd_search(args) -> int:
+    terms = [t.lower() for t in args.terms]
+    hits = []
+    for d, f in iter_transcripts(args.silo):
+        n_match, first_ts, last_ts, cwd, snips, role_user = 0, None, None, None, [], []
+        try:
+            with f.open(encoding="utf-8", errors="replace") as fh:
+                for line in fh:
+                    low = line.lower()
+                    # Cheap prefilter: skip JSON parsing unless every term is on
+                    # the raw line. This is what keeps a 100+ transcript sweep
+                    # to a second or two.
+                    if not all(t in low for t in terms):
+                        continue
+                    try:
+                        e = json.loads(line)
+                    except Exception:
+                        continue
+                    t = text_of(e)
+                    tl = t.lower()
+                    if not all(term in tl for term in terms):
+                        continue
+                    n_match += 1
+                    ts = str(e.get("timestamp") or "")[:19]
+                    if ts:
+                        first_ts = min(first_ts or ts, ts)
+                        last_ts = max(last_ts or ts, ts)
+                    cwd = cwd or e.get("cwd")
+                    if len(snips) < args.snippets:
+                        s = snippet(t, terms)
+                        if s:
+                            snips.append((e.get("type", "?"), s))
+                    if e.get("type") == "user" and len(role_user) < 2:
+                        role_user.append(re.sub(r"\s+", " ", t)[:110])
+        except OSError:
+            continue
+        if n_match:
+            hits.append({"silo": silo_label(d), "file": f, "n": n_match,
+                         "first": first_ts, "last": last_ts, "cwd": cwd,
+                         "snips": snips, "asks": role_user})
+
+    if not hits:
+        print(f"no sessions matched: {' '.join(args.terms)}")
+        return 1
+
+    hits.sort(key=lambda h: (h["last"] or ""), reverse=True)
+    print(f"{len(hits)} session(s) matched {' + '.join(args.terms)}\n")
+    for h in hits[:args.limit]:
+        when = (h["last"] or "?")[:16].replace("T", " ")
+        print(f"  {when}  [{h['silo']}]  {h['n']} match(es)")
+        print(f"    {h['file']}")
+        if h["cwd"]:
+            print(f"    cwd: {h['cwd']}")
+        for ask in h["asks"]:
+            print(f"    asked: {ask}")
+        for typ, s in h["snips"]:
+            print(f"    · ({typ}) {s}")
+        print()
+    if len(hits) > args.limit:
+        print(f"  … {len(hits) - args.limit} more (raise --limit)")
+    return 0
+
+
+def cmd_silos(args) -> int:
+    rows = []
+    for d in sorted(ROOT.iterdir()) if ROOT.is_dir() else []:
+        if not d.is_dir():
+            continue
+        files = list(d.glob("*.jsonl"))
+        if not files:
+            continue
+        newest = max(f.stat().st_mtime for f in files)
+        mem = d / "memory"
+        n_mem = len([p for p in mem.glob("*.md") if p.name != "MEMORY.md"]) if mem.is_dir() else 0
+        rows.append((newest, silo_label(d), len(files), n_mem, d.name))
+    rows.sort(reverse=True)
+    print(f"{'last active':17} {'silo':40} {'sessions':>8} {'memories':>9}")
+    for newest, label, n, n_mem, _ in rows[:args.limit]:
+        when = datetime.fromtimestamp(newest).strftime("%Y-%m-%d %H:%M")
+        print(f"{when:17} {label:40} {n:>8} {n_mem:>9}")
+    return 0
+
+
+def cmd_show(args) -> int:
+    """Print the user turns of one session — the fastest way to see what it was about."""
+    f = Path(args.file)
+    if not f.is_file():
+        print(f"not a file: {f}", file=sys.stderr)
+        return 2
+    n = 0
+    with f.open(encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            try:
+                e = json.loads(line)
+            except Exception:
+                continue
+            if e.get("type") != "user":
+                continue
+            t = re.sub(r"\s+", " ", text_of(e)).strip()
+            if not t or t.startswith("<"):
+                continue
+            n += 1
+            ts = str(e.get("timestamp") or "")[:16].replace("T", " ")
+            print(f"  [{ts}] {t[:args.width]}")
+            if n >= args.limit:
+                break
+    return 0
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(prog="session-recall", description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    s = sub.add_parser("search", help="find past sessions mentioning ALL the given terms")
+    s.add_argument("terms", nargs="+")
+    s.add_argument("--silo", help="restrict to silos matching this substring")
+    s.add_argument("--limit", type=int, default=8)
+    s.add_argument("--snippets", type=int, default=2)
+    s.set_defaults(fn=cmd_search)
+
+    s = sub.add_parser("silos", help="list project silos, newest activity first")
+    s.add_argument("--limit", type=int, default=20)
+    s.set_defaults(fn=cmd_silos)
+
+    s = sub.add_parser("show", help="print the user turns of one transcript")
+    s.add_argument("file")
+    s.add_argument("--limit", type=int, default=40)
+    s.add_argument("--width", type=int, default=160)
+    s.set_defaults(fn=cmd_show)
+
+    args = ap.parse_args()
+    return args.fn(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
