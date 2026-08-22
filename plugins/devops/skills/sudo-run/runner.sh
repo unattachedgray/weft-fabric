@@ -32,17 +32,20 @@ if ! sudo -v; then
   exit 126
 fi
 
-# Keep the sudo timestamp fresh for long-running jobs.
-( while kill -0 "$$" 2>/dev/null; do sudo -n true 2>/dev/null; sleep 30; done ) &
-KEEPALIVE=$!
+# NOTE: Do NOT add a `sudo -n true` keepalive loop here.
+# Ubuntu 25.10+ ships sudo-rs, which allocates a pty and seizes terminal state on
+# EVERY invocation. A periodic sudo in this process group hands the terminal back
+# and forth; the relaying sudo eventually lands in a background process group,
+# takes SIGTTOU on its next write, stops, and forwards the stop down to the job.
+# The symptom is a job frozen in state T that a plain SIGCONT resumes to a clean
+# exit. If a long job outlives the sudo timestamp, sudo just reprompts in this
+# visible window, which is the behaviour we want anyway.
 
 echo "### START $(date -Iseconds)" | tee -a "$LOG"
 set -o pipefail
 bash "$CMD" 2>&1 | tee -a "$LOG"
 ec=${PIPESTATUS[0]}
 echo "### END $(date -Iseconds) (exit code: $ec)" | tee -a "$LOG"
-
-kill "$KEEPALIVE" 2>/dev/null
 
 # Write exit_code LAST and atomically so the watcher never sees a partial file.
 printf '%s\n' "$ec" > "$JOB_DIR/exit_code.tmp" && mv "$JOB_DIR/exit_code.tmp" "$JOB_DIR/exit_code"
