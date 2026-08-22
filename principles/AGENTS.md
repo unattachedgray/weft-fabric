@@ -41,6 +41,7 @@ Asking twice for the same action, or any "try it → didn't work → try again" 
 
 ### Closing a loop — what that actually takes
 
+- **Docs drift silently — nothing fails when they go stale.** When you change what a project *does*, update the page that says what it does, in the same commit. Between times, offer at a natural boundary rather than waiting to be asked: *"the docs are behind on X — want them brought current?"* Measured: one day's work left a benchmark's own documentation describing a suite that asked the owner questions it no longer asks.
 - **Trace the write.** A loop is not closed because a decision was *recorded*. Follow the value to the line that reads it. Twelve settings decisions sat answered and marked `changed: true` while nothing in the read path ever opened that file.
 - **A question to a person is often a measurement question in costume.** Once they can state their policy, what is left is evidence — and evidence is code's job. Asking someone to arbitrate noise spends the one input only they have.
 - **Thin evidence is a request for another measurement, not a question.** If the harness can run again, it should.
