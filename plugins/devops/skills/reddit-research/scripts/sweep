@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# Paced Google→Reddit sweep through an armed tab. See SKILL.md for why.
+#   sweep OUTDIR "query one" "query two" ...
+set -u
+OUT="${1:?usage: sweep OUTDIR query...}"; shift
+mkdir -p "$OUT"; : > "$OUT/log.txt"
+TC="${TUNNEL_CMD:-python3 /home/julian/dev/weft/scripts/weft/tunnel_cmd.py}"
+TAB="${SWEEP_TAB:-research}"
+say() { echo "[$(date +%H:%M:%S)] $*" >> "$OUT/log.txt"; }
+pause() { s=$(( ( RANDOM % $2 ) + $1 )); say "   pause ${s}s"; sleep "$s"; }
+
+# One tab, opened by us and armed, so the owner's tabs are never navigated.
+# Keep its ID: names shift as tabs come and go, IDs do not.
+TAB_ID=$($TC open "about:blank" 2>/dev/null | python3 -c "
+import json,sys
+try: print(json.load(sys.stdin).get('data',{}).get('tabId') or '')
+except Exception: print('')")
+if [ -z "$TAB_ID" ]; then
+  echo "could not open a tab — is one already armed to carry the command?" >&2
+  exit 1
+fi
+say "opened tab $TAB_ID"
+trap '$TC close --tab "$TAB_ID" >/dev/null 2>&1' EXIT
+sleep 3
+grab() { $TC --tab "$TAB_ID" navigate "$2" >/dev/null 2>&1; pause 9 6
+         $TC --tab "$TAB_ID" snapshot --save "$OUT/$1" >/dev/null 2>&1; }
+
+i=0
+for q in "$@"; do
+  i=$((i+1)); say "google: $q"
+  grab "g$i" "https://www.google.com/search?q=$(python3 -c "
+import urllib.parse,sys; print(urllib.parse.quote_plus(sys.argv[1]+' site:reddit.com'))" "$q")"
+  pause 11 10
+  mapfile -t urls < <(python3 - "$OUT/g$i/page.html" <<'PY'
+import re,sys,pathlib,html
+p=pathlib.Path(sys.argv[1])
+if not p.exists(): raise SystemExit
+s=p.read_text(errors="replace"); seen=[]
+for m in re.finditer(r'https://www\.reddit\.com/r/[A-Za-z0-9_]+/comments/[a-z0-9]+/[a-z0-9_]+/', s):
+    u=html.unescape(m.group(0))
+    if u not in seen: seen.append(u)
+print("\n".join(seen[:3]))
+PY
+)
+  n=0
+  for u in "${urls[@]:-}"; do
+    [ -z "$u" ] && continue
+    n=$((n+1)); [ "$n" -gt 2 ] && break
+    say "  thread: $u"; grab "t${i}_${n}" "$u"; pause 16 15
+  done
+  pause 20 21
+done
+say "DONE"

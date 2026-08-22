@@ -1,0 +1,42 @@
+#!/usr/bin/env python3
+"""Pull the post body and comments out of a saved Reddit snapshot.
+
+    extract DIR/page.html [--min 60]
+
+Prints the post, then the comments ranked by how many technical terms they
+carry — the comments are where the decision-changing material lives.
+"""
+import html, pathlib, re, sys
+
+def clean(x):
+    x = re.sub(r"<script.*?</script>|<style.*?</style>", " ", x, flags=re.S)
+    return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", x))).strip()
+
+def main():
+    if len(sys.argv) < 2:
+        print(__doc__); return 1
+    path = pathlib.Path(sys.argv[1])
+    floor = int(sys.argv[sys.argv.index("--min") + 1]) if "--min" in sys.argv else 60
+    s = path.read_text(errors="replace")
+    title = re.search(r"<title>(.*?)</title>", s, re.S)
+    print("TITLE:", html.unescape(title.group(1)) if title else "?")
+    body = re.findall(r'<div[^>]*id="t3_[^"]*-post-rtjson-content"[^>]*>(.*?)</div>', s, re.S)
+    print("\n=== POST ===\n" + (clean(body[0]) if body else "(no self text — likely an image post)"))
+    blocks = re.findall(r'<div[^>]*id="[^"]*-comment-rtjson-content"[^>]*>(.*?)</div>', s, re.S)
+    seen, out = set(), []
+    for b in blocks:
+        t = clean(b)
+        if floor < len(t) < 1400 and t not in seen:
+            seen.add(t); out.append(t)
+    # Rank, do not truncate: a short specific correction beats a long vague one.
+    KEY = ("setting", "step", "cfg", "denoise", "sampler", "scheduler", "node",
+           "lora", "vae", "resolution", "actually", "wrong", "instead", "issue",
+           "problem", "fix", "bug", "worse", "better", "tested", "measured")
+    out.sort(key=lambda t: -sum(k in t.lower() for k in KEY))
+    print(f"\n=== {len(out)} COMMENTS, most technical first ===")
+    for i, t in enumerate(out, 1):
+        print(f"\n[{i}] {t}")
+    return 0
+
+if __name__ == "__main__":
+    sys.exit(main())

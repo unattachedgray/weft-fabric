@@ -20,9 +20,36 @@ button (or Alt+Shift+T). This is the same local relay Codex uses (`~/.codex/skil
    and is normally supervised by pm2) and that `BROWSER_TUNNEL_TOKEN` is set in `~/.env`.
 3. Run commands through `scripts/firefox-control`; it sources `~/.env` for the token
    without printing it.
-4. **Start with `tabs`, not `snapshot`.** It lists every open tab with its title, URL and
-   which one is armed, so you can name the exact tab the user should arm instead of
-   guessing. If nothing is armed, tell them once which tab to click.
+4. **Start with `armed`, not `tabs` and never `snapshot`.** `armed` reads the relay's
+   registry: every armed tab, in every Firefox profile, each with a name. It touches
+   no tab, so it cannot act on the wrong one while you are still working out which
+   one you want.
+
+   ```
+   2 armed tab(s) across 2 profile(s):
+
+     work/civitai      tab5   active      Civitai
+                       https://civitai.com/images
+     personal/studio   tab9   background  Studio
+                       http://127.0.0.1:8765/studio
+   ```
+
+   **More than one tab can be armed at once, including across two Firefox profiles
+   logged into different accounts.** So a command must say which tab it means:
+
+   ```bash
+   scripts/firefox-control --tab work/civitai snapshot
+   ```
+
+   The bare site name (`civitai`) works when it is unique. With several armed and no
+   `--tab`, the relay refuses and lists the candidates — it will not pick one for you,
+   because acting on the wrong logged-in profile is worse than a failed command.
+
+   `tabs` still lists every OPEN tab, but it has to be executed by a tab, so it can
+   only describe the one profile that answered. Use it to find a tab for the user to
+   arm; use `armed` to find a tab to command.
+
+   If nothing is armed, tell them once which tab to click.
 5. Then `snapshot`. Read its header block before the payload — it names the tab that
    answered. **A screenshot is only returned when the armed tab is the visible one.**
    `chrome.tabs.captureVisibleTab` can only photograph the foreground tab, so when the
@@ -45,13 +72,30 @@ another way.
 ## Commands
 
 ```bash
-scripts/firefox-control tabs                 # list every open tab, marking the armed one
+scripts/firefox-control armed                # every armed tab, every profile, named
+scripts/firefox-control tabs                 # every open tab in the answering profile
 scripts/firefox-control snapshot
 scripts/firefox-control eval 'document.title'
 scripts/firefox-control click '#selector'
 scripts/firefox-control type '#selector' 'text'
 scripts/firefox-control navigate 'https://example.com'
+
+# --tab goes before the action and works on all of them
+scripts/firefox-control --tab civitai snapshot
+scripts/firefox-control --tab personal/studio eval 'document.title'
 ```
+
+**Names come from the host.** `civitai.com` is `civitai`, `docs.google.com` is
+`docs.google`, `127.0.0.1:8765` is `local-8765`. Two profiles with the same site
+open are told apart by the profile label (`work/civitai`, `personal/civitai`),
+which the owner sets in the extension popup. Two tabs on the same site in the
+SAME profile get a number appended. A tab id also works as a target.
+
+**Each Firefox profile is a separate client.** The extension gives every profile
+a persistent id and registers its armed tabs; the relay routes each command to
+one client's queue. Before this, a single global command slot went to whichever
+profile polled first — with two profiles running, commands landed at random in
+whichever browser answered, against whichever account was logged in there.
 
 **`eval` fails on the /doc/ pages** — they ship a strict CSP without `unsafe-eval`, so
 `eval()` is blocked outright. Use `snapshot` and parse the returned DOM instead.
