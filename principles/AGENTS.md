@@ -16,6 +16,8 @@ Asking twice for the same action, or any "try it → didn't work → try again" 
 - **A null is inadmissible** without a liveness check *in that same run*. Never let `x || {}` turn "instrument missing" into "nothing happened".
 - **Preconditions are aborts, not care** — encode them so a violated run refuses to report.
 - **Detect the phenomenon, not your hypothesis.** An instrument that can only confirm the current guess can never bisect; you will just guess again at higher resolution.
+- **Verify the treatment was applied, not requested.** Read the setting back off the running system. A "control" arm that silently carried the treatment turned a real 39% gain into "no difference"; the flag you passed is not evidence of the state you got.
+- **Never identify a process by its command line.** Your own shell contains the string you are grepping for. Match the executable, not the argv.
 - **Localize, then change. Never use a code edit as a probe.** A fix for an un-localized cause is a speculative edit with real blast radius: it can add regressions, and it destroys attribution for every later reading. If a change does not kill the symptom, revert it unless it stands on its own evidence.
 - **Set a stop rule** before starting: after N failed rounds, change *approach* — do not repeat the same shape more sensitively. Say up front if the loop will occupy the user's screen, keyboard, or machine.
 
@@ -29,6 +31,14 @@ Asking twice for the same action, or any "try it → didn't work → try again" 
 - **Decide** like the user would, asking minimally: reserve them for novel / destructive / high-stakes / uncertain; offer 2–3 options; when unclear, run A/B/N (bounded, reversible, never destructive live).
 - **Learn:** goal fixed, methods provisional; measure *outcomes adopted*, never *activity generated*.
 - **Adoption test:** before adopting a tool/idea — does it have / create / improve a loop? If none, adopt as a plain tool, honestly labeled → `flywheel-audit` skill.
+
+### Closing a loop — what that actually takes
+
+- **Trace the write.** A loop is not closed because a decision was *recorded*. Follow the value to the line that reads it. Twelve settings decisions sat answered and marked `changed: true` while nothing in the read path ever opened that file.
+- **A question to a person is often a measurement question in costume.** Once they can state their policy, what is left is evidence — and evidence is code's job. Asking someone to arbitrate noise spends the one input only they have.
+- **Thin evidence is a request for another measurement, not a question.** If the harness can run again, it should.
+- **Reject noise by repeated direction, not by margin size.** A small win that repeats is signal; one large win is not. Compare arms measured under the same conditions.
+- **A brake that never opens is a stall, not a governor.** Prefer adopt-on-trial-then-watch over a bar so high nothing ever clears it — then revert on evidence, and do not re-offer what already failed.
 
 ## Deterministic Code Over A Model, When The Rule Can Be Written Down
 
