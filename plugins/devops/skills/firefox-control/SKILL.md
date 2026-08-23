@@ -1,6 +1,6 @@
 ---
 name: firefox-control
-description: Inspect and interact with the user's explicitly armed Firefox tab through Weft's local browser tunnel (looking_glass.py + the Browser Tunnel extension). Use when Claude must view an authenticated page as rendered in Firefox, capture its DOM and screenshot, execute diagnostic JavaScript, click or type into elements, or navigate the armed tab while debugging a live web app or browser extension.
+description: Inspect and interact with the user's explicitly armed Firefox session through Weft's local browser tunnel (looking_glass.py + the Browser Tunnel extension). Use when an agent must view an authenticated page as rendered in Firefox, open or navigate background tabs, capture DOM and screenshots, execute diagnostic JavaScript, click or type into elements, or debug a live web app or browser extension.
 clis: claude, codex, gemini, cursor
 clis-why: "THE capability no CLI or model has natively — a live, authenticated Firefox tab. Not redundant with any built-in browser tool: those drive a fresh throwaway browser with no session. Link it into every CLI."
 ---
@@ -60,7 +60,13 @@ button (or Alt+Shift+T). This is the same local relay Codex uses (`~/.codex/skil
 6. Prefer read-only `eval` expressions while diagnosing — e.g. read `chrome.runtime.lastError`,
    inspect extension storage, check `console` state via injected probes. Use `click`, `type`,
    or `navigate` only within the user's request.
-7. Verify fixes in the real rendered page after rebuilding/reloading the extension or app.
+7. When one armed tab is available as a carrier, `open URL` creates and arms a new tab.
+   It stays in the background by default, so authenticated research does not steal the
+   owner's screen or keyboard. Use `--focus` only when the task genuinely needs the
+   rendered screenshot; background snapshots still return the target tab's DOM.
+8. Close tabs created for the task with `--tab NAME close` when they are no longer needed.
+   Do not close the tab the owner originally armed unless they explicitly asked for it.
+9. Verify fixes in the real rendered page after rebuilding/reloading the extension or app.
 
 If no tab is armed, do not ask the user to become the iteration loop — tell them once to
 click the Browser Tunnel toolbar button on the tab you need, or arm it yourself only if
@@ -79,11 +85,19 @@ scripts/firefox-control eval 'document.title'
 scripts/firefox-control click '#selector'
 scripts/firefox-control type '#selector' 'text'
 scripts/firefox-control navigate 'https://example.com'
+scripts/firefox-control open 'https://example.com' # new armed background tab
+scripts/firefox-control open 'https://example.com' --focus
+scripts/firefox-control --tab example close       # close a tab this tool opened
 
 # --tab goes before the action and works on all of them
 scripts/firefox-control --tab civitai snapshot
 scripts/firefox-control --tab personal/studio eval 'document.title'
 ```
+
+`open` is tab-agnostic: it needs any armed tab to carry the command, then registers the
+new tab as its own named target. Prefer passing the owner's known tab explicitly as the
+carrier when several are armed. `navigate` does not activate a background target, so it
+is also safe for non-disruptive research once the new tab exists.
 
 **Names come from the host.** `civitai.com` is `civitai`, `docs.google.com` is
 `docs.google`, `127.0.0.1:8765` is `local-8765`. Two profiles with the same site
