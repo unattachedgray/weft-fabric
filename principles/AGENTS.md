@@ -48,6 +48,17 @@ Asking twice for the same action, or any "try it → didn't work → try again" 
 - **Reject noise by repeated direction, not by margin size.** A small win that repeats is signal; one large win is not. Compare arms measured under the same conditions.
 - **A brake that never opens is a stall, not a governor.** Prefer adopt-on-trial-then-watch over a bar so high nothing ever clears it — then revert on evidence, and do not re-offer what already failed.
 
+## Shared Tasks at Session Start
+
+At the start of each new session, run `python3 ~/dev/weft/scripts/weft/wtask
+brief` once. This is the common cross-project task list: every CLI may add
+freely with `wtask add`. Items marked `easy_win` may be completed autonomously
+when they are relevant, bounded, reversible, locally verifiable, and do not
+need new authority; verify them, mark them done with a completion note, and
+report the result to the user. Items marked `recommend` are proposals: surface
+them in a relevant session and wait for the owner's direction. When uncertain,
+recommend rather than act.
+
 ## Deterministic Code Over A Model, When The Rule Can Be Written Down
 
 **If you can derive the rule from real measurements, write the rule.** A model
