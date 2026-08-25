@@ -94,7 +94,7 @@ This is the rule most likely to be broken by a well-meaning agent.
 | Built-in security review | `/security-review` | — | — | — |
 | Built-in browser control | `claude-in-chrome` | — | — | — |
 | Plugin marketplace | yes (`unatt` registered) | no | no | no |
-| Skill discovery | marketplace + `~/.claude/skills` | `~/.codex/skills` | `~/.gemini/config/skills` | `~/.cursor/skills-cursor` — **managed, do not link** |
+| Skill discovery | marketplace + `~/.claude/skills` | `~/.codex/skills` | `~/.gemini/config/skills` | union of `~/.cursor/skills-cursor` (managed, do not link) + `~/.claude/skills` + `~/.codex/skills` — see §1 |
 | Output styles | yes — `~/.claude/output-styles` | — | — | — |
 | Loads `principles/AGENTS.md` | **yes** — `@import` in `~/.claude/CLAUDE.md` | **yes** — `~/.codex/AGENTS.md` symlink | **yes** — `~/.gemini/AGENTS.md` symlink | **yes** — per-project rule (see below) |
 
