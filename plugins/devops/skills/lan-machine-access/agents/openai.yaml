@@ -1,0 +1,4 @@
+interface:
+  display_name: "LAN Machine Access"
+  short_description: "Use configured LAN machines through SSH"
+  default_prompt: "Use $lan-machine-access to verify and connect to the configured LAN machine needed for this task."

@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+alias_name="${1:-t430}"
+config_file="${LAN_MACHINE_SSH_CONFIG:-$HOME/.ssh/config}"
+
+case "$alias_name" in
+  ''|*[!A-Za-z0-9._-]*)
+    echo "error=invalid_alias"
+    exit 2
+    ;;
+esac
+
+config="$(ssh -F "$config_file" -G "$alias_name" 2>/dev/null)" || {
+  echo "configured=no"
+  echo "direct_route=no"
+  echo "ssh_ready=no"
+  exit 3
+}
+
+hostname="$(awk '$1 == "hostname" { print $2; exit }' <<<"$config")"
+user="$(awk '$1 == "user" { print $2; exit }' <<<"$config")"
+
+if [[ -z "$hostname" || "$hostname" == "$alias_name" ]]; then
+  echo "alias=$alias_name"
+  echo "configured=no"
+  echo "direct_route=no"
+  echo "ssh_ready=no"
+  exit 4
+fi
+
+ip="$(getent ahostsv4 "$hostname" 2>/dev/null | awk 'NR == 1 { print $1 }' || true)"
+route=""
+if [[ -n "$ip" ]]; then
+  route="$(ip route get "$ip" 2>/dev/null | head -n 1 || true)"
+fi
+
+direct=no
+if [[ -n "$route" && "$route" != *" via "* ]]; then
+  direct=yes
+fi
+
+ready=no
+if [[ "$direct" == yes ]] && ssh -F "$config_file" -o BatchMode=yes -o ConnectTimeout=4 "$alias_name" true 2>/dev/null; then
+  ready=yes
+fi
+
+echo "alias=$alias_name"
+echo "configured=yes"
+echo "host=$hostname"
+echo "user=$user"
+echo "direct_route=$direct"
+echo "ssh_ready=$ready"
+
+[[ "$ready" == yes ]]
