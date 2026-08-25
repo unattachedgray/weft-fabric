@@ -36,6 +36,34 @@ If the observable sits a layer away from what the user perceives, it cannot see
 their symptom. Sampling rate must beat the phenomenon: two writes inside one
 frame are invisible to a per-frame sampler *by construction*.
 
+## Step 1a — Ten ways to build the loop (pick the highest that reaches the bug)
+
+A menu, in rough order of preference (adapted from mattpocock/skills
+`diagnosing-bugs`, MIT). Spend disproportionate effort here; a tight loop is
+most of the fix.
+
+1. **Failing test** at whatever seam reaches the bug — unit, integration, e2e.
+2. **Curl/HTTP script** against a running dev server.
+3. **CLI invocation** with a fixture input, diffing stdout against a known-good snapshot.
+4. **Headless browser script** asserting on DOM/console/network.
+5. **Replay a captured trace** — save a real payload/event log, replay it through the code path in isolation.
+6. **Throwaway harness** — a minimal subset (one service, mocked deps) exercising the bug path in one call.
+7. **Property/fuzz loop** — for "sometimes wrong output", 1000 random inputs, look for the failure mode.
+8. **Bisection harness** — if the bug appeared between two known states, automate "boot at X, check" so `git bisect run` works.
+9. **Differential loop** — same input through old vs new (or two configs), diff outputs.
+10. **Structured HITL script** — last resort; if a human must click, drive *them* with a script so the loop stays structured and its output feeds back.
+
+Then **tighten it**: faster (cache setup, narrow scope), sharper (assert the
+specific symptom, not "didn't crash"), more deterministic (pin time, seed RNG,
+freeze network). A 2-second deterministic loop is a superpower; a 30-second
+flaky one is barely better than none. Non-deterministic bugs: raise the
+reproduction *rate* (loop the trigger 100×, parallelise, stress, narrow timing).
+
+**Completion criterion:** you can name one command — a script path, a test
+invocation, a curl — that you have already run at least once and seen go red
+on *this* bug. Until then, Step 1 is not done. The steps below then make that
+loop *trustworthy*; a red loop wired to the wrong code is still a false sensor.
+
 ## Step 1b — Prove the sensor is WIRED to the right code, not just honest
 
 Controls prove an instrument is honest about what it watches. They cannot tell
