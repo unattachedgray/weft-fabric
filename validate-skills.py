@@ -172,5 +172,65 @@ def main(argv: list[str]) -> int:
     print(msg + f" to the cross-CLI Agent-Skills standard. [YAML: {mode}]")
     return 0
 
+def check_links() -> int:
+    """--links: the arrangement's promises, checked deterministically.
+
+    1. No copies — every entry in a CLI skill dir is a symlink into this repo.
+    2. Everything under principles/skills/ is linked in ALL three CLI dirs.
+    3. Every symlink resolves to an existing directory with a SKILL.md.
+    4. Plugin skills linked NOWHERE are reported (informational — may be
+       deliberate, e.g. output-style companions).
+    (Added 2026-08-23 after a panel audit found diagnostic-loop linked in one
+    CLI of three and session-recall in none — silent drift, no detector.)
+    """
+    import os
+    from pathlib import Path
+    repo = Path(__file__).resolve().parent
+    dirs = {d: Path(os.path.expanduser(d)) for d in
+            ("~/.claude/skills", "~/.codex/skills", "~/.gemini/config/skills")}
+    bad = 0
+    linked: set[Path] = set()
+    for label, d in dirs.items():
+        if not d.is_dir():
+            print(f"✗ missing CLI skill directory: {label}")
+            bad += 1
+            continue
+        for f in sorted(d.iterdir()):
+            if f.name.startswith("."):
+                continue
+            if not f.is_symlink():
+                print(f"✗ COPY (not a symlink): {label}/{f.name}")
+                bad += 1
+                continue
+            tgt = f.resolve()
+            if not (tgt / "SKILL.md").is_file():
+                print(f"✗ dangling or SKILL.md-less link: {label}/{f.name} -> {tgt}")
+                bad += 1
+                continue
+            if repo not in tgt.parents:
+                print(f"✗ link outside canonical repo: {label}/{f.name} -> {tgt}")
+                bad += 1
+                continue
+            linked.add(tgt)
+    for p in sorted((repo / "principles" / "skills").iterdir()):
+        if not p.is_dir():
+            continue
+        expected = p.resolve()
+        missing = []
+        for label, d in dirs.items():
+            link = d / p.name
+            if not link.is_symlink() or link.resolve() != expected:
+                missing.append(label)
+        if missing:
+            print(f"✗ portable skill '{p.name}' missing or mislinked in: {', '.join(missing)}")
+            bad += 1
+    orphans = [p.parent.name for p in repo.glob("plugins/*/skills/*/SKILL.md")
+               if p.parent.resolve() not in linked]
+    if orphans:
+        print(f"ℹ plugin skills linked nowhere (check deliberate): {', '.join(sorted(orphans))}")
+    print("links: " + ("OK" if bad == 0 else f"{bad} problem(s)"))
+    return 1 if bad else 0
+
+
 if __name__ == "__main__":
-    raise SystemExit(main(sys.argv[1:]))
+    raise SystemExit(check_links() if "--links" in sys.argv else main(sys.argv[1:]))
