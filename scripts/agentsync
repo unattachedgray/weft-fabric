@@ -1,0 +1,357 @@
+#!/usr/bin/env python3
+"""agentsync — make this machine match the repo. Idempotent; safe on a timer.
+
+Every run reconciles: pull, re-link every detected CLI from cli-targets.json,
+refresh the marketplace, arm the commit hook, ensure a MACHINE.md exists.
+Running it twice changes nothing, which is what lets the same command be the
+new-machine installer, the hourly timer, and the manual repair tool.
+
+  agentsync              reconcile, print what changed
+  agentsync --dry-run    report drift, change nothing
+  agentsync --no-pull    reconcile from the working tree as-is
+  agentsync --quiet      only report changes and problems (timer mode)
+  agentsync --install-timer   add/refresh the hourly systemd --user timer
+
+Exit codes: 0 converged (with or without changes), 1 a step failed.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+
+REPO = Path(__file__).resolve().parents[1]
+CANON = REPO / "principles" / "AGENTS.md"
+PORTABLE = REPO / "principles" / "skills"
+STYLES = REPO / "plugins"
+MANIFEST = REPO / "cli-targets.json"
+MACHINE = Path.home() / ".config" / "agents" / "MACHINE.md"
+
+# A non-interactive ssh session gets a minimal PATH, so CLI detection would
+# silently miss tools that are installed. Widen it before detecting anything.
+for _extra in (Path.home() / ".local/bin", Path.home() / "bin", Path("/usr/local/bin"),
+               Path("/usr/local/sbin"), Path("/opt/homebrew/bin"), Path("/snap/bin")):
+    if _extra.is_dir() and str(_extra) not in os.environ.get("PATH", "").split(":"):
+        os.environ["PATH"] = f"{_extra}:{os.environ.get('PATH', '')}"
+
+changed: list[str] = []
+problems: list[str] = []
+notes: list[str] = []
+
+
+def say(msg: str, quiet: bool) -> None:
+    if not quiet:
+        print(msg)
+
+
+def run(cmd: list[str], **kw) -> subprocess.CompletedProcess:
+    return subprocess.run(cmd, capture_output=True, text=True, **kw)
+
+
+def expand(value: str | None) -> Path | None:
+    return Path(os.path.expandvars(value)).expanduser() if value else None
+
+
+def detects(cmds: list[str]) -> bool:
+    return any(subprocess.run(c, shell=True, capture_output=True).returncode == 0 for c in cmds)
+
+
+# ---------------------------------------------------------------- git
+
+def git_pull(dry: bool, quiet: bool) -> None:
+    dirty = run(["git", "-C", str(REPO), "status", "--porcelain"]).stdout.strip()
+    if dirty:
+        notes.append(f"clone has uncommitted changes; skipped pull ({len(dirty.splitlines())} file(s))")
+        return
+    before = run(["git", "-C", str(REPO), "rev-parse", "HEAD"]).stdout.strip()
+    if dry:
+        run(["git", "-C", str(REPO), "fetch", "--quiet"])
+        behind = run(["git", "-C", str(REPO), "rev-list", "--count", "HEAD..@{u}"]).stdout.strip()
+        if behind and behind != "0":
+            changed.append(f"WOULD pull {behind} commit(s)")
+        return
+    result = run(["git", "-C", str(REPO), "pull", "--ff-only", "--quiet"])
+    if result.returncode != 0:
+        notes.append("pull failed (offline?): " + result.stderr.strip().splitlines()[-1:][0] if result.stderr.strip() else "pull failed")
+        return
+    after = run(["git", "-C", str(REPO), "rev-parse", "HEAD"]).stdout.strip()
+    if before != after:
+        changed.append(f"pulled {before[:7]} -> {after[:7]}")
+    say(f"  repo at {after[:7]}", quiet)
+
+
+def arm_hook(dry: bool) -> None:
+    current = run(["git", "-C", str(REPO), "config", "--get", "core.hooksPath"]).stdout.strip()
+    if current == "hooks":
+        return
+    if dry:
+        changed.append("WOULD set core.hooksPath=hooks")
+        return
+    run(["git", "-C", str(REPO), "config", "core.hooksPath", "hooks"])
+    changed.append("armed SKILL.md validation (core.hooksPath=hooks)")
+
+
+# ---------------------------------------------------------------- linking
+
+def link(target: Path, at: Path, dry: bool) -> None:
+    """Point `at` at `target` as a symlink. Idempotent."""
+    if at.is_symlink() and at.resolve() == target.resolve():
+        return
+    if dry:
+        changed.append(f"WOULD link {tilde(at)} -> {tilde(target)}")
+        return
+    at.parent.mkdir(parents=True, exist_ok=True)
+    if at.exists() or at.is_symlink():
+        if at.is_symlink() or at.is_file():
+            at.unlink()
+        else:
+            problems.append(f"{tilde(at)} is a directory; refusing to replace")
+            return
+    at.symlink_to(target)
+    changed.append(f"linked {tilde(at)} -> {tilde(target)}")
+
+
+def ensure_imports(path: Path, imports: list[Path], dry: bool) -> None:
+    """Ensure `path` contains an @<abs> line per import, without touching the rest."""
+    existing = path.read_text(encoding="utf-8") if path.exists() else ""
+    lines = existing.splitlines()
+    missing = [i for i in imports if f"@{i}" not in lines]
+    if not missing:
+        return
+    if dry:
+        for i in missing:
+            changed.append(f"WOULD add @import {tilde(i)} to {tilde(path)}")
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not existing:
+        body = "".join(f"@{i}\n\n" for i in imports)
+        path.write_text(body + "<!-- machine-local additions below are never synced -->\n", encoding="utf-8")
+    else:
+        # Prepend only what is missing; never reorder or delete existing content.
+        path.write_text("".join(f"@{i}\n" for i in missing) + "\n" + existing, encoding="utf-8")
+    for i in missing:
+        changed.append(f"added @import {tilde(i)} to {tilde(path)}")
+
+
+def tilde(p: Path) -> str:
+    s = str(p)
+    home = str(Path.home())
+    return "~" + s[len(home):] if s.startswith(home) else s
+
+
+# ---------------------------------------------------------------- machine-local
+
+STUB = """# {host} — machine-local notes
+
+Facts true on THIS machine only. Shared principles live in the claude-skills
+repo and reach every CLI by symlink; this file is the other half.
+
+Generated by agentsync on first run — replace the detected facts below with
+real notes as you learn them.
+
+## This machine
+- host `{host}`, {osname}
+- python {py}
+- missing vs a full userland: {missing}
+
+## Machine-local overrides to the shared core
+List here any shared rule that cannot run on this machine, and what to do
+instead. A rule naming a path this box does not have is overridden here, never
+by editing the shared file.
+"""
+
+
+def ensure_machine(dry: bool) -> None:
+    if MACHINE.exists():
+        return
+    if dry:
+        changed.append(f"WOULD create {tilde(MACHINE)}")
+        return
+    try:
+        osname = ""
+        rel = Path("/etc/os-release")
+        if rel.exists():
+            for line in rel.read_text().splitlines():
+                if line.startswith("PRETTY_NAME="):
+                    osname = line.split("=", 1)[1].strip().strip('"')
+        host = os.uname().nodename or "unknown-host"
+        missing = ", ".join(t for t in ("awk", "hostname", "git", "curl", "rsync", "ssh")
+                            if not shutil.which(t)) or "none detected"
+        MACHINE.parent.mkdir(parents=True, exist_ok=True)
+        MACHINE.write_text(STUB.format(host=host, osname=osname or "unknown OS",
+                                       py=".".join(map(str, sys.version_info[:3])),
+                                       missing=missing), encoding="utf-8")
+        changed.append(f"created {tilde(MACHINE)} (stub — edit it)")
+    except OSError as e:
+        problems.append(f"could not create {tilde(MACHINE)}: {e}")
+
+
+# ---------------------------------------------------------------- CLIs
+
+def sync_cli(cli: dict, dry: bool, quiet: bool) -> bool:
+    if not detects(cli["detect"]):
+        return False
+    name = cli["name"]
+    say(f"  {name}", quiet)
+
+    inst = expand(cli.get("instructions"))
+    if inst:
+        if cli.get("method") == "symlink":
+            link(CANON, inst, dry)
+        else:
+            wanted = [CANON] + ([MACHINE] if cli.get("machine_local") else [])
+            ensure_imports(inst, wanted, dry)
+
+    sk = expand(cli.get("skills_dir"))
+    if sk and PORTABLE.is_dir():
+        for src in sorted(p for p in PORTABLE.iterdir() if p.is_dir()):
+            link(src, sk / src.name, dry)
+
+    st = expand(cli.get("output_styles_dir"))
+    if st and STYLES.is_dir():
+        for src in sorted(STYLES.glob("*/skills/*/output-styles/*.md")):
+            link(src, st / src.name, dry)
+    return True
+
+
+def sync_tools(dry: bool, quiet: bool) -> None:
+    """Link repo tools onto PATH. Never clobber a real file we did not link."""
+    src = REPO / "tools"
+    if not src.is_dir():
+        return
+    dest = Path.home() / ".local" / "bin"
+    say("tools:", quiet)
+    for tool in sorted(p for p in src.iterdir() if p.is_file() and os.access(p, os.X_OK)):
+        at = dest / tool.name
+        if at.exists() and not at.is_symlink():
+            # A real file here is either a hand-placed copy or another project's
+            # tool. Report it rather than silently replacing someone's binary.
+            if at.read_bytes() == tool.read_bytes():
+                if not dry:
+                    at.unlink()
+                    at.symlink_to(tool)
+                    changed.append(f"replaced identical copy {tilde(at)} with a symlink")
+                else:
+                    changed.append(f"WOULD replace identical copy {tilde(at)} with a symlink")
+            else:
+                problems.append(f"{tilde(at)} is a real file that differs from the repo — not replacing")
+            continue
+        link(tool, at, dry)
+
+
+def refresh_marketplace(dry: bool, quiet: bool) -> None:
+    if not shutil.which("claude"):
+        return
+    if dry:
+        notes.append("would refresh the unatt marketplace")
+        return
+    listed = run(["claude", "plugin", "marketplace", "list"])
+    if "unatt" in (listed.stdout + listed.stderr):
+        run(["claude", "plugin", "marketplace", "update", "unatt"])
+        say("  marketplace unatt refreshed", quiet)
+    else:
+        r = run(["claude", "plugin", "marketplace", "add", "unattachedgray/claude-skills"])
+        if r.returncode == 0:
+            changed.append("registered the unatt marketplace")
+        else:
+            notes.append("could not register the marketplace")
+
+
+# ---------------------------------------------------------------- timer
+
+UNIT = """[Unit]
+Description=Converge agent CLI config with the claude-skills repo
+
+[Service]
+Type=oneshot
+ExecStart={exe} --quiet
+"""
+
+TIMER = """[Unit]
+Description=Hourly agentsync
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+"""
+
+
+def install_timer() -> int:
+    if not shutil.which("systemctl"):
+        print("no systemctl here — schedule agentsync with the platform's own scheduler", file=sys.stderr)
+        return 1
+    d = Path.home() / ".config" / "systemd" / "user"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "agentsync.service").write_text(UNIT.format(exe=Path(__file__).resolve()), encoding="utf-8")
+    (d / "agentsync.timer").write_text(TIMER, encoding="utf-8")
+    run(["systemctl", "--user", "daemon-reload"])
+    r = run(["systemctl", "--user", "enable", "--now", "agentsync.timer"])
+    if r.returncode != 0:
+        print("failed to enable timer:", r.stderr.strip(), file=sys.stderr)
+        return 1
+    print("agentsync.timer enabled (hourly, 3 min after boot)")
+    if run(["loginctl", "show-user", os.environ.get("USER", ""), "--property=Linger"]).stdout.strip().endswith("no"):
+        print("note: Linger=no — this timer only runs while your session/VM is up")
+    return 0
+
+
+# ---------------------------------------------------------------- main
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--dry-run", action="store_true", help="report drift, change nothing")
+    ap.add_argument("--no-pull", action="store_true", help="skip the git pull")
+    ap.add_argument("--quiet", action="store_true", help="only report changes and problems")
+    ap.add_argument("--install-timer", action="store_true", help="add/refresh the hourly timer, then exit")
+    args = ap.parse_args()
+
+    if args.install_timer:
+        return install_timer()
+
+    if not CANON.is_file():
+        print(f"agentsync: canonical principles missing: {CANON}", file=sys.stderr)
+        return 1
+    try:
+        manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"agentsync: cannot read {MANIFEST}: {e}", file=sys.stderr)
+        return 1
+
+    say(f"agentsync — {tilde(REPO)}", args.quiet)
+    if not args.no_pull:
+        git_pull(args.dry_run, args.quiet)
+    arm_hook(args.dry_run)
+    ensure_machine(args.dry_run)
+
+    say("CLIs:", args.quiet)
+    found = [c["name"] for c in manifest["clis"] if sync_cli(c, args.dry_run, args.quiet)]
+    skipped = [c["name"] for c in manifest["clis"] if c["name"] not in found]
+    if skipped:
+        say(f"  not installed here: {', '.join(skipped)}", args.quiet)
+
+    sync_tools(args.dry_run, args.quiet)
+    refresh_marketplace(args.dry_run, args.quiet)
+
+    if changed:
+        print(("would change" if args.dry_run else "changed") + ":")
+        for c in changed:
+            print(f"  - {c}")
+    elif not args.quiet:
+        print("already converged — nothing to do.")
+    for n in notes:
+        print(f"note: {n}")
+    for p in problems:
+        print(f"PROBLEM: {p}", file=sys.stderr)
+    return 1 if problems else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

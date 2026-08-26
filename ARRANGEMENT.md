@@ -61,6 +61,36 @@ Remote: `github.com/unattachedgray/claude-skills`
                               Claude Code @imports it from ~/.claude/CLAUDE.md.
 ```
 
+### Convergence: one command, run constantly
+
+`scripts/agentsync` is the only thing that writes those symlinks. It is
+idempotent — every run reconciles this machine with the repo, and a second run
+changes nothing — which is why the same command is the installer, the hourly
+timer, and the repair tool. There is deliberately no separate install path that
+runs once and rots.
+
+```
+scripts/agentsync              reconcile, print what changed
+scripts/agentsync --dry-run    report drift, change nothing
+scripts/agentsync --install-timer   hourly systemd --user timer
+
+tools/            symlinked into ~/.local/bin by agentsync
+  wsecret         scoped secret registrar (stdlib-only, portable)
+  wtask           shared task list; runs locally if the weft repo is here,
+                  otherwise over ssh to the owner host
+  wmachine        enrol a whole machine from the owner host
+  wfleet          which machines are converged, and sync them
+```
+
+**Adding a CLI is data, not code.** `cli-targets.json` holds every CLI's
+instruction path, link method, and skills dir. Add an entry, commit, and every
+machine wires it up on its next sync. Nothing hardcodes CLI paths any more —
+`scripts/deploy-principles.sh` is a shim kept only for the `--uninstall` path.
+
+`wvault` and `weft-vault-mcp` are deliberately **not** in this repo: `wtoken
+install` already distributes them over ssh, privately, and they carry the vault
+endpoint and auth header. Minting authority (`wtoken`) stays on the owner host.
+
 **Machine-specific facts do not belong in this repo.** A path, hostname, or
 "tool X is missing here" that is true on one box and false on another must live in
 that box's `~/.config/agents/MACHINE.md`, never in `principles/AGENTS.md` — which

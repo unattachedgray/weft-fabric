@@ -1,0 +1,74 @@
+#!/usr/bin/env python3
+"""wtask — the shared cross-CLI task list, reachable from any machine.
+
+The real implementation lives in the weft repo and is backed by a file on the
+OWNER HOST (~/.local/share/weft/tasks.json), not by the vault. So a machine
+without the weft repo cannot read the list locally — but it can reach it over
+the SSH trust that already exists.
+
+This shim resolves that automatically:
+  * weft repo present locally  -> exec the real wtask
+  * otherwise                  -> run it on the owner host over SSH
+
+That makes the shared core's "run wtask brief at session start" rule work
+everywhere instead of only on the owner host.
+
+Owner host resolution, first hit wins:
+  $WEFT_OWNER_HOST  ->  ~/.config/agents/owner-host  ->  "venge"
+The value must be an ssh config alias, not a command.
+"""
+from __future__ import annotations
+
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import sys
+
+LOCAL = Path.home() / "dev" / "weft" / "scripts" / "weft" / "wtask"
+REMOTE = "~/dev/weft/scripts/weft/wtask"
+ALIAS = re.compile(r"^[A-Za-z0-9._-]+$")
+
+
+def owner_host() -> str:
+    env = os.environ.get("WEFT_OWNER_HOST", "").strip()
+    if env:
+        return env
+    cfg = Path.home() / ".config" / "agents" / "owner-host"
+    try:
+        value = cfg.read_text(encoding="utf-8").strip()
+        if value:
+            return value
+    except OSError:
+        pass
+    return "venge"
+
+
+def main(argv: list[str]) -> int:
+    if LOCAL.is_file():
+        os.execv(str(LOCAL), [str(LOCAL), *argv])
+
+    host = owner_host()
+    if not ALIAS.fullmatch(host):
+        print(f"wtask: refusing suspicious owner host {host!r} — must be an ssh alias", file=sys.stderr)
+        return 2
+    if not shutil.which("ssh"):
+        print("wtask: no local weft repo and no ssh to reach the owner host", file=sys.stderr)
+        return 2
+
+    # Quote each argument for the remote shell; never interpolate raw.
+    from shlex import quote
+    remote_cmd = " ".join([REMOTE, *(quote(a) for a in argv)])
+    result = subprocess.run(
+        ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", host, remote_cmd]
+    )
+    if result.returncode == 255:
+        print(f"wtask: could not reach owner host '{host}'. The shared task list lives "
+              f"there; set $WEFT_OWNER_HOST or ~/.config/agents/owner-host if that is wrong.",
+              file=sys.stderr)
+    return result.returncode
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

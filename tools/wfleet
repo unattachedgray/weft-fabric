@@ -1,0 +1,144 @@
+#!/usr/bin/env python3
+"""wfleet — is every machine actually converged?
+
+Read-only. Uses the SSH trust and the machine registry that already exist, so
+it needs no new credential and no write access anywhere.
+
+  wfleet status          one line per machine: repo SHA, drift, CLIs, timer
+  wfleet status --full   also list each machine's detected CLIs
+  wfleet sync            run agentsync on every reachable machine
+
+Machines come from ~/.config/weft/vault-machines.json (the registry wtoken
+already maintains). A machine whose host is "local" is checked in place.
+
+Silent drift is the failure mode this exists to kill: a symlink to a stale
+commit resolves exactly like a symlink to a current one, so nothing breaks
+loudly when a box falls behind. This turns that into a number.
+"""
+from __future__ import annotations
+
+import argparse
+import concurrent.futures as cf
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+REGISTRY = Path.home() / ".config" / "weft" / "vault-machines.json"
+REPO_DIR = "~/dev/claude-skills"
+
+PROBE = r"""
+set -u
+export PATH="$HOME/.local/bin:$HOME/bin:/usr/local/bin:/usr/local/sbin:/snap/bin:/opt/homebrew/bin:$PATH"
+if [ -d ~/dev/claude-skills/.git ]; then
+  git -C ~/dev/claude-skills rev-parse --short HEAD
+else
+  echo NOREPO
+fi
+systemctl --user is-active agentsync.timer 2>/dev/null || echo notimer
+for c in claude codex gemini cursor-agent dsh; do
+  command -v $c >/dev/null 2>&1 && printf '%s ' "$c"
+done
+echo
+exit 0
+"""
+
+
+def registry() -> dict[str, str]:
+    try:
+        data = json.loads(REGISTRY.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return {name: meta.get("host", "") for name, meta in data.items() if isinstance(meta, dict)}
+
+
+def probe(name: str, host: str) -> dict:
+    out = {"name": name, "host": host, "sha": "?", "timer": "?", "clis": "", "err": ""}
+    try:
+        if host == "local":
+            r = subprocess.run(["bash", "-s"], input=PROBE, capture_output=True, text=True, timeout=45)
+        else:
+            r = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", host, "bash -s"],
+                               input=PROBE, capture_output=True, text=True, timeout=45)
+        if r.returncode != 0:
+            out["err"] = "unreachable"
+            return out
+        lines = [x.strip() for x in r.stdout.splitlines()]
+        out["sha"] = lines[0] if lines else "?"
+        out["timer"] = lines[1] if len(lines) > 1 else "?"
+        out["clis"] = lines[2] if len(lines) > 2 else ""
+    except subprocess.TimeoutExpired:
+        out["err"] = "timeout"
+    except OSError as e:
+        out["err"] = str(e)[:40]
+    return out
+
+
+def local_head() -> str:
+    r = subprocess.run(["git", "-C", str(Path(__file__).resolve().parents[1]),
+                        "rev-parse", "--short", "HEAD"], capture_output=True, text=True)
+    return r.stdout.strip() or "?"
+
+
+def cmd_status(full: bool) -> int:
+    machines = registry()
+    if not machines:
+        print(f"no machines in {REGISTRY} — enrol one with `wmachine enroll <ssh-host>`", file=sys.stderr)
+        return 1
+    ref = local_head()
+    print(f"reference: {ref}  (this checkout)\n")
+    with cf.ThreadPoolExecutor(max_workers=8) as pool:
+        rows = list(pool.map(lambda kv: probe(*kv), sorted(machines.items())))
+
+    print(f"{'MACHINE':<22}{'HOST':<10}{'REPO':<10}{'STATE':<12}{'TIMER':<10}CLIS")
+    behind = 0
+    for r in rows:
+        if r["err"]:
+            state, sha, timer = r["err"], "-", "-"
+        elif r["sha"] == "NOREPO":
+            state, sha, timer = "no repo", "-", r["timer"]
+            behind += 1
+        elif r["sha"] == ref:
+            state, sha, timer = "converged", r["sha"], r["timer"]
+        else:
+            state, sha, timer = "DRIFTED", r["sha"], r["timer"]
+            behind += 1
+        clis = r["clis"] if full else str(len(r["clis"].split())) + " detected"
+        print(f"{r['name']:<22}{r['host']:<10}{sha:<10}{state:<12}{timer:<10}{clis}")
+
+    print()
+    if behind:
+        print(f"{behind} machine(s) not at {ref} — `wfleet sync` to converge them")
+    else:
+        print("all reachable machines converged")
+    return 0
+
+
+def cmd_sync() -> int:
+    machines = registry()
+    rc = 0
+    for name, host in sorted(machines.items()):
+        print(f"\n=== {name} ({host}) ===")
+        cmd = f"{REPO_DIR}/scripts/agentsync"
+        if host == "local":
+            r = subprocess.run(["bash", "-lc", cmd], capture_output=True, text=True, timeout=300)
+        else:
+            r = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", host, cmd],
+                               capture_output=True, text=True, timeout=300)
+        print((r.stdout or r.stderr).strip() or f"(no output, rc={r.returncode})")
+        rc |= 0 if r.returncode == 0 else 1
+    return rc
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest="action", required=True)
+    s = sub.add_parser("status", help="report convergence across the fleet")
+    s.add_argument("--full", action="store_true", help="list detected CLIs per machine")
+    sub.add_parser("sync", help="run agentsync on every reachable machine")
+    a = ap.parse_args()
+    return cmd_status(a.full) if a.action == "status" else cmd_sync()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

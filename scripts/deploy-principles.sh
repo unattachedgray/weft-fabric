@@ -1,78 +1,53 @@
 #!/usr/bin/env bash
-# deploy-principles.sh — wire the agent-neutral operating principles + portable skills into
-# every agent CLI on this machine (Claude Code, Codex, Antigravity, Cursor). Idempotent and
-# reversible; uses symlinks so a repo update propagates to all agents.
+# deploy-principles.sh — compatibility shim.
 #
-#   deploy-principles.sh              install
-#   deploy-principles.sh --uninstall  remove only the symlinks this script created
+# The per-CLI paths this script used to hardcode now live in cli-targets.json,
+# and the linking is done by scripts/agentsync. Keeping two implementations was
+# the real risk: one of them silently rots, and you cannot tell which ran.
 #
-# Single source of truth: principles/AGENTS.md in this repo.
-# Why per-agent glue: Codex can't @import (reads ~/.codex/AGENTS.md as a real file → symlink);
-# Antigravity reads ~/.gemini/AGENTS.md natively (v1.20.3+); Claude Code pins the shared core with
-# an absolute-path @import written into ~/.claude/CLAUDE.md (never the @~/ form, which silently
-# fails: anthropics/claude-code#8765) — machine-local notes live below the import, untouched.
-# Cursor Agent walks ancestors for AGENTS.md, so ~/AGENTS.md covers every project under $HOME.
+#   deploy-principles.sh              -> agentsync --no-pull
+#   deploy-principles.sh --uninstall  -> remove only the links we created
+#
+# Add support for a new CLI by adding an entry to cli-targets.json, not by
+# editing shell here. Every machine picks it up on its next sync.
 set -euo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-CANON="$REPO/principles/AGENTS.md"
-SKILLS_SRC="$REPO/principles/skills"
-
-link() { ln -sfn "$1" "$2"; echo "  $2 -> $1"; }
 
 if [ "${1:-}" = "--uninstall" ]; then
-  for f in "$HOME/.codex/AGENTS.md" "$HOME/.gemini/AGENTS.md" "$HOME/AGENTS.md"; do
-    [ -L "$f" ] && rm -v "$f" || true
-  done
-  for d in "$HOME/.codex/skills" "$HOME/.gemini/config/skills"; do
-    [ -d "$SKILLS_SRC" ] && for sk in "$SKILLS_SRC"/*/; do
-      l="$d/$(basename "$sk")"; [ -L "$l" ] && rm -v "$l" || true
-    done
-  done
-  CC="$HOME/.claude/CLAUDE.md"; IMPORT="@$CANON"
-  if [ -f "$CC" ] && grep -qxF "$IMPORT" "$CC"; then
-    tmp="$(mktemp)"; grep -vxF "$IMPORT" "$CC" > "$tmp"; mv "$tmp" "$CC"
-    echo "  removed @import from $CC (machine-local content kept)"
-  fi
-  echo "uninstalled."; exit 0
+  CANON="$REPO/principles/AGENTS.md"
+  SKILLS_SRC="$REPO/principles/skills"
+  # Only ever remove symlinks, and only ones pointing into this repo.
+  python3 - "$REPO" <<'PY'
+import json, os, sys
+from pathlib import Path
+repo = Path(sys.argv[1])
+manifest = json.loads((repo / "cli-targets.json").read_text())
+removed = []
+for cli in manifest["clis"]:
+    for key in ("instructions", "skills_dir", "output_styles_dir"):
+        raw = cli.get(key)
+        if not raw:
+            continue
+        p = Path(os.path.expandvars(raw)).expanduser()
+        targets = [p] if key == "instructions" else (list(p.iterdir()) if p.is_dir() else [])
+        for t in targets:
+            try:
+                if t.is_symlink() and repo in t.resolve().parents:
+                    t.unlink(); removed.append(str(t))
+            except OSError:
+                pass
+for t in (Path.home() / ".local/bin").glob("*"):
+    try:
+        if t.is_symlink() and repo in t.resolve().parents:
+            t.unlink(); removed.append(str(t))
+    except OSError:
+        pass
+print(f"removed {len(removed)} symlink(s) into {repo}")
+for r in removed:
+    print("  ", r)
+print("machine-local content (~/.claude/CLAUDE.md, ~/.config/agents/MACHINE.md) was left alone.")
+PY
+  exit 0
 fi
 
-[ -f "$CANON" ] || { echo "canonical principles file missing: $CANON" >&2; exit 1; }
-
-echo "principles -> agent global-instruction files:"
-mkdir -p "$HOME/.codex" "$HOME/.gemini" "$HOME/.claude"
-link "$CANON" "$HOME/.codex/AGENTS.md"    # Codex (native, no @import)
-link "$CANON" "$HOME/.gemini/AGENTS.md"   # Antigravity (native AGENTS.md)
-link "$CANON" "$HOME/AGENTS.md"           # Cursor Agent (ancestor walk from any $HOME project)
-
-# Claude Code: @import the shared core (absolute path; @~/ silently fails, #8765). Idempotent —
-# add the import once, at the top, preserving any machine-local content already in CLAUDE.md.
-CC="$HOME/.claude/CLAUDE.md"; IMPORT="@$CANON"
-if [ -f "$CC" ] && grep -qxF "$IMPORT" "$CC"; then
-  echo "  $CC already imports the shared core."
-elif [ -f "$CC" ]; then
-  # Existing CLAUDE.md without the import: prepend ONLY the import line (imports resolve from
-  # anywhere). Don't add another header/marker — that accretes on repeated install runs.
-  tmp="$(mktemp)"; { printf '%s\n\n' "$IMPORT"; cat "$CC"; } > "$tmp"; mv "$tmp" "$CC"
-  echo "  added @import atop existing $CC — nothing deleted."
-  echo "    This machine had its own principles; CONSOLIDATE them with the shared core"
-  echo "    (promote universal ones up into AGENTS.md, keep machine-specific below, drop dups)."
-  echo "    See README → 'Consolidating a machine that already has its own principles'."
-else
-  # No CLAUDE.md yet: create the thin scaffold.
-  printf '# CLAUDE.md — machine-local (imports the shared core; add machine-specific notes below)\n\n%s\n\n<!-- machine-local additions below are never synced -->\n' "$IMPORT" > "$CC"
-  echo "  created $CC -> $IMPORT"
-fi
-
-# "Claude already has them" was false. Claude Code only sees a skill that is
-# installed as a plugin or symlinked into ~/.claude/skills, and this script did
-# neither — so flywheel-audit was unreachable from Claude Code while the
-# AGENTS.md loaded into EVERY Claude session ended by pointing at it. Claude is
-# now linked alongside the other two.
-echo "portable skills -> claude + codex + antigravity skills dirs:"
-for d in "$HOME/.claude/skills" "$HOME/.codex/skills" "$HOME/.gemini/config/skills"; do
-  mkdir -p "$d"
-  for sk in "$SKILLS_SRC"/*/; do
-    link "$sk" "$d/$(basename "$sk")"
-  done
-done
-echo "done. (re-run after a repo update; symlinks already point at the latest.)"
+exec "$REPO/scripts/agentsync" --no-pull "$@"

@@ -15,6 +15,11 @@
       "description": "Business / go-to-market: CEO advisory and strategy, marketing ideas (140 SaaS marketing approaches), App Store Optimization, UX research (interviews, personas, journey mapping), email systems (deliverability, automation, transactional)."
     },
     {
+      "name": "catalog",
+      "source": "./plugins/catalog",
+      "description": "A generated index of every skill in the unatt marketplace, including plugins not installed on this machine. Regenerated on every release, so it is never out of date with the repo."
+    },
+    {
       "name": "claude-stack",
       "source": "./plugins/claude-stack",
       "description": "Anthropic ecosystem + cross-model tools: Claude API / Agent SDK app development (with prompt caching), MCP server building, Gemini CLI for large-context review, parallel Gemini + Codex cross-validation (multi-ai-review), and a bundled monthly-refreshed LLM API pricing reference (llm-api-pricing)."

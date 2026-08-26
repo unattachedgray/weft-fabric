@@ -1,0 +1,8 @@
+{
+  "name": "catalog",
+  "description": "A generated index of every skill in the unatt marketplace, including plugins not installed on this machine. Install it to let any session answer \"what skills do I have available?\" without guessing.",
+  "author": {
+    "name": "unattachedgray",
+    "url": "https://github.com/unattachedgray"
+  }
+}

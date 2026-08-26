@@ -1,0 +1,188 @@
+#!/usr/bin/env python3
+"""wmachine — bring a whole machine up to fleet standard in one command.
+
+Runs on the OWNER HOST (the box holding wtoken and the vault mint). Everything
+it does on the target is idempotent, so a partial run is repaired by running it
+again rather than needing a transaction: convergence, not installation.
+
+  wmachine enroll <ssh-host> [--name NAME] [--no-vault] [--days N]
+  wmachine check  <ssh-host>
+
+Steps, each verified by reading the result back off the target:
+  1  reachable over ssh, and has git + python3
+  2  clone or fast-forward ~/dev/claude-skills
+  3  run agentsync — links every detected CLI, tools, and skills; writes a
+     MACHINE.md stub; arms the commit hook
+  4  install the hourly agentsync timer
+  5  wtoken install — scoped vault token + rotation coverage   (skip: --no-vault)
+  6  read back what actually landed
+
+The target needs NO prior setup beyond sshd and your key. It does not need the
+weft repo, the w* tools, or any credential in advance.
+"""
+from __future__ import annotations
+
+import argparse
+import re
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+REPO_URL = "https://github.com/unattachedgray/claude-skills"
+REPO_DIR = "~/dev/claude-skills"
+HOST_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+WTOKEN = Path.home() / "dev" / "weft" / "scripts" / "weft" / "wtoken"
+
+OK, BAD, WARN = "  ok ", "FAIL ", "note "
+
+
+def ssh(host: str, script: str, timeout: int = 300) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=15", host, "bash -s"],
+        input=script, capture_output=True, text=True, timeout=timeout,
+    )
+
+
+def step(n: int, title: str) -> None:
+    print(f"\n[{n}] {title}")
+
+
+def report(status: str, msg: str) -> None:
+    print(f"    {status} {msg}")
+
+
+def check_host(host: str) -> bool:
+    if not HOST_RE.fullmatch(host):
+        print(f"refused: {host!r} must be an ssh config alias, not options or a command", file=sys.stderr)
+        return False
+    return True
+
+
+def cmd_check(host: str) -> int:
+    """Read-only: what state is this machine in?"""
+    if not check_host(host):
+        return 2
+    probe = r"""
+set -u
+export PATH="$HOME/.local/bin:$HOME/bin:/usr/local/bin:/usr/local/sbin:/snap/bin:/opt/homebrew/bin:$PATH"
+echo "os=$(. /etc/os-release 2>/dev/null && echo "$PRETTY_NAME" || uname -s)"
+echo "git=$(command -v git >/dev/null && echo yes || echo NO)"
+echo "python3=$(command -v python3 >/dev/null && echo yes || echo NO)"
+echo "repo=$([ -d ~/dev/claude-skills/.git ] && git -C ~/dev/claude-skills rev-parse --short HEAD || echo ABSENT)"
+echo "machine_md=$([ -f ~/.config/agents/MACHINE.md ] && echo yes || echo NO)"
+echo "timer=$(systemctl --user is-active agentsync.timer 2>/dev/null || echo none)"
+echo "vault=$([ -f ~/.config/weft/vault-token ] && echo yes || echo NO)"
+for c in claude codex gemini cursor-agent dsh; do
+  command -v $c >/dev/null 2>&1 && printf 'cli=%s\n' "$c"
+done
+exit 0
+"""
+    r = ssh(host, probe, timeout=60)
+    if r.returncode != 0:
+        print(f"{BAD} cannot reach {host}: {r.stderr.strip().splitlines()[-1] if r.stderr.strip() else r.returncode}")
+        return 1
+    print(f"{host}:")
+    clis = []
+    for line in r.stdout.splitlines():
+        if line.startswith("cli="):
+            clis.append(line.split("=", 1)[1])
+        elif "=" in line:
+            k, v = line.split("=", 1)
+            print(f"    {k:<11} {v}")
+    print(f"    {'clis':<11} {', '.join(clis) or 'none detected'}")
+    return 0
+
+
+def cmd_enroll(host: str, name: str | None, vault: bool, days: int) -> int:
+    if not check_host(host):
+        return 2
+    name = name or f"{host}-wvault"
+    print(f"enrolling {host} as {name}")
+
+    step(1, "reachability and prerequisites")
+    r = ssh(host, "command -v git >/dev/null && command -v python3 >/dev/null && echo READY || echo MISSING", timeout=60)
+    if r.returncode != 0:
+        report(BAD, f"ssh to {host} failed — is sshd up and your key installed?")
+        return 1
+    if "READY" not in r.stdout:
+        report(BAD, "target lacks git and/or python3 — install them there first")
+        return 1
+    report(OK, "ssh works; git and python3 present")
+
+    step(2, "clone or update the shared repo")
+    r = ssh(host, f"""
+set -eu
+mkdir -p ~/dev
+if [ -d {REPO_DIR}/.git ]; then
+  git -C {REPO_DIR} pull --ff-only --quiet 2>/dev/null || echo "  (pull skipped)"
+else
+  git clone --quiet {REPO_URL} {REPO_DIR}
+fi
+git -C {REPO_DIR} rev-parse --short HEAD
+""")
+    if r.returncode != 0:
+        report(BAD, f"clone/update failed: {r.stderr.strip()[:200]}")
+        return 1
+    report(OK, f"repo at {r.stdout.strip().splitlines()[-1]}")
+
+    step(3, "converge every CLI on the target")
+    r = ssh(host, f"{REPO_DIR}/scripts/agentsync")
+    if r.returncode != 0:
+        report(BAD, f"agentsync failed: {(r.stderr or r.stdout).strip()[:300]}")
+        return 1
+    for line in r.stdout.splitlines():
+        if line.strip():
+            report("     ", line.rstrip())
+
+    step(4, "install the hourly timer")
+    r = ssh(host, f"{REPO_DIR}/scripts/agentsync --install-timer")
+    report(OK if r.returncode == 0 else WARN,
+           (r.stdout or r.stderr).strip().splitlines()[-1] if (r.stdout or r.stderr).strip() else "no scheduler")
+
+    if vault:
+        step(5, "vault enrollment (mints a scoped token)")
+        if not WTOKEN.is_file():
+            report(WARN, f"wtoken not found at {WTOKEN} — run this from the owner host to enrol the vault")
+        else:
+            r = subprocess.run([str(WTOKEN), "install", name, host, "default", "--days", str(days)],
+                               capture_output=True, text=True, timeout=300)
+            for line in (r.stdout or r.stderr).strip().splitlines():
+                report(OK if r.returncode == 0 else BAD, line)
+            if r.returncode != 0:
+                return 1
+    else:
+        step(5, "vault enrollment skipped (--no-vault)")
+
+    step(6, "read back what actually landed")
+    return cmd_check(host)
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest="action", required=True)
+    e = sub.add_parser("enroll", help="bring a machine up to fleet standard")
+    e.add_argument("host")
+    e.add_argument("--name", help="vault token name (default <host>-wvault)")
+    e.add_argument("--no-vault", action="store_true", help="skip minting a vault token")
+    e.add_argument("--days", type=int, default=30, help="token TTL in days")
+    c = sub.add_parser("check", help="report a machine's state, change nothing")
+    c.add_argument("host")
+    a = ap.parse_args()
+
+    if not shutil.which("ssh"):
+        print("wmachine: ssh not found", file=sys.stderr)
+        return 2
+    if a.action == "check":
+        return cmd_check(a.host)
+    return cmd_enroll(a.host, a.name, not a.no_vault, a.days)
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except subprocess.TimeoutExpired:
+        print("wmachine: timed out talking to the target", file=sys.stderr)
+        raise SystemExit(1)
+    except KeyboardInterrupt:
+        raise SystemExit(130)
