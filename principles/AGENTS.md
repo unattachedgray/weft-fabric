@@ -11,6 +11,10 @@ Before asking the user to do anything by hand (run, click, paste, rebuild, look 
 
 Asking twice for the same action, or any "try it → didn't work → try again" loop, means a missing harness — stop and build it. Loop until concrete runtime verification proves the goal is done. The human belongs at the *governor* gate, never in the *iteration* loop.
 
+**Launch the terminal; never dictate one.** When a step genuinely needs a human at a keyboard — a secret at a hidden prompt, an interactive login, a curses UI — open a real terminal window for them and leave it waiting at the prompt. Printing a command block to be copied into another terminal is the same failure as using them as a test runner: it moves your work onto their hands, and the multi-step copy/edit/paste variant is worse. Check whether you can launch it *before* explaining why they must do it. Two rules keep the handoff safe:
+- **A script that needs a TTY must `[ -t 0 ]`-guard and refuse without one.** Measured: a token installer lacking that guard was run where stdin was already at EOF, wrote a 0-byte credential file, and reported success — the failure surfaced only when an unrelated check read the file back.
+- **Confirm a secret by prefix, length and mode — never by echoing it.** The window the human types into is the only component that sees the value.
+
 **An unvalidated harness is worse than none — it spins the loop confidently in the wrong direction.** Before trusting a reading, above all a *null* one → `diagnostic-loop` skill.
 - **Prove the sensor fires** on a real instance, reached the way the real one is reached. A synthetic stimulus that skips the real code path validates nothing.
 - **A null is inadmissible** without a liveness check *in that same run*. Never let `x || {}` turn "instrument missing" into "nothing happened".
