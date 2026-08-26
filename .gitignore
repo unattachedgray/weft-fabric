@@ -1,2 +1,4 @@
 # Graphify outputs — regeneratable from source, contain local cost tracking + cache
 graphify-out/
+__pycache__/
+*.pyc

@@ -85,14 +85,30 @@ def git_pull(dry: bool, quiet: bool) -> None:
 
 
 def arm_hook(dry: bool) -> None:
+    """Point git at hooks/ AND make the hook executable.
+
+    git silently ignores a non-executable hook with only a hint, so setting
+    hooksPath alone leaves validation looking armed while doing nothing. A
+    fresh clone does not always preserve the bit.
+    """
+    hook = REPO / "hooks" / "pre-commit"
     current = run(["git", "-C", str(REPO), "config", "--get", "core.hooksPath"]).stdout.strip()
-    if current == "hooks":
+    needs_path = current != "hooks"
+    needs_bit = hook.is_file() and not os.access(hook, os.X_OK)
+    if not (needs_path or needs_bit):
         return
     if dry:
-        changed.append("WOULD set core.hooksPath=hooks")
+        if needs_path:
+            changed.append("WOULD set core.hooksPath=hooks")
+        if needs_bit:
+            changed.append("WOULD make hooks/pre-commit executable")
         return
-    run(["git", "-C", str(REPO), "config", "core.hooksPath", "hooks"])
-    changed.append("armed SKILL.md validation (core.hooksPath=hooks)")
+    if needs_path:
+        run(["git", "-C", str(REPO), "config", "core.hooksPath", "hooks"])
+        changed.append("armed SKILL.md validation (core.hooksPath=hooks)")
+    if needs_bit:
+        hook.chmod(hook.stat().st_mode | 0o111)
+        changed.append("made hooks/pre-commit executable (git ignores it otherwise)")
 
 
 # ---------------------------------------------------------------- linking
