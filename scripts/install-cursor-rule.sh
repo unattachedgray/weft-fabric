@@ -88,6 +88,9 @@ if [ -d "$HOME/.cursor/projects" ]; then
     slug="$(basename "$p")"
     case "$slug" in
       home-"$(basename "$HOME")"|home-"$(basename "$HOME")"-*) continue ;;  # under $HOME: ancestor walk covers it
+      # Throwaway dirs an agent worked in once. Reporting them hourly buries the
+      # real signal, which is the whole point of reporting at all.
+      tmp-*|var-tmp-*|run-*|proc-*) continue ;;
     esac
     printf '%s' "$covered" | grep -qxF "$slug" && continue
     uncovered="$uncovered  $slug
