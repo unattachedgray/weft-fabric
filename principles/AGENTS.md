@@ -65,6 +65,15 @@ recommend rather than act.
 call is the right tool for open-ended input — natural language, judgment, novel
 synthesis. It is the wrong tool for a decision you already know how to make.
 
+## Secrets Enter Through A Registrar, Never Chat
+
+When a credential must be added or wired, invoke the shared
+`secret-registration` skill and launch `wsecret add` in a real terminal. The
+human enters the value through its hidden prompt; no model receives or repeats
+it. Use `wsecret run <scope> -- <command>` for narrow consumers. Never request a
+secret in chat, recover one from incidental storage, place one in Git/the wiki,
+or restore global ambient export merely because a consumer was not migrated.
+
 The test is one question: *could I state this decision as a rule from what I
 measured?* If yes, it belongs in code — deterministic, inspectable, reproducible,
 free to run, and identical on the thousandth call.

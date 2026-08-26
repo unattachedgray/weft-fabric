@@ -17,9 +17,10 @@ button (or Alt+Shift+T). This is the same local relay Codex uses (`~/.codex/skil
    authorized browser control.
 2. Confirm `looking_glass.py` is running locally on `127.0.0.1:8770`
    (`ps aux | grep looking_glass.py`; it lives at `~/dev/weft/scripts/weft/looking_glass.py`
-   and is normally supervised by pm2) and that `BROWSER_TUNNEL_TOKEN` is set in `~/.env`.
-3. Run commands through `scripts/firefox-control`; it sources `~/.env` for the token
-   without printing it.
+   and is normally supervised by pm2) and that `wsecret list` reports
+   `BROWSER_TUNNEL_TOKEN` in the `browser` scope.
+3. Run commands through `scripts/firefox-control`; it injects only the `browser`
+   scope into `tunnel_cmd.py` without printing the token.
 4. **Start with `armed`, not `tabs` and never `snapshot`.** `armed` reads the relay's
    registry: every armed tab, in every Firefox profile, each with a name. It touches
    no tab, so it cannot act on the wrong one while you are still working out which
