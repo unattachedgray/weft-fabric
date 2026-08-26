@@ -52,7 +52,21 @@ Remote: `github.com/unattachedgray/claude-skills`
                           └─► all symlinks to principles/AGENTS.md (one inode).
                               Claude Code is the exception: ~/.claude/CLAUDE.md
                               is a real file that @imports it.
+
+~/.config/agents/MACHINE.md   per-machine, NOT in this repo, NOT synced, no symlink.
+                          └─► the other half of the pair: what is true on THIS box
+                              only. principles/AGENTS.md ("Machine-Local Notes")
+                              tells every CLI to read it at session start, which is
+                              how Codex/Gemini/Cursor reach it — they cannot @import.
+                              Claude Code @imports it from ~/.claude/CLAUDE.md.
 ```
+
+**Machine-specific facts do not belong in this repo.** A path, hostname, or
+"tool X is missing here" that is true on one box and false on another must live in
+that box's `~/.config/agents/MACHINE.md`, never in `principles/AGENTS.md` — which
+is byte-identical everywhere by design. When a shared rule cannot run on a machine
+(it names `~/dev/weft` on a box without it, say), the machine's own file overrides
+it. Editing the shared file to accommodate one machine breaks the other two.
 
 **A copy is a bug.** It drifts from the repo silently and it is unbacked. This
 has already happened: Codex held 11 copies, 8 of them byte-identical duplicates

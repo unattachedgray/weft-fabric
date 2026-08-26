@@ -52,6 +52,21 @@ Asking twice for the same action, or any "try it → didn't work → try again" 
 - **Reject noise by repeated direction, not by margin size.** A small win that repeats is signal; one large win is not. Compare arms measured under the same conditions.
 - **A brake that never opens is a stall, not a governor.** Prefer adopt-on-trial-then-watch over a bar so high nothing ever clears it — then revert on evidence, and do not re-offer what already failed.
 
+## Machine-Local Notes
+
+Each machine keeps its own facts — paths, hostnames, which tools are actually
+installed, which of the rules below it can even run — at
+`~/.config/agents/MACHINE.md`. **Read it at session start when it exists.**
+
+It is authoritative for the machine you are on and **overrides anything in this
+file that cannot run there.** A rule here that names a path, a command, or a repo
+the local box does not have is overridden in that file, never by editing this one:
+this file is shared and identical everywhere, that one is per-machine and unsynced.
+Keep machine-specific facts out of here and in there.
+
+Claude Code reaches it by `@import` from `~/.claude/CLAUDE.md`; the other CLIs read
+it because this file tells them to — they have no import mechanism.
+
 ## Shared Tasks at Session Start
 
 At the start of each new session, run `python3 ~/dev/weft/scripts/weft/wtask
