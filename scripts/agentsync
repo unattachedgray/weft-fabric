@@ -235,6 +235,16 @@ def sync_cli(cli: dict, dry: bool, quiet: bool) -> bool:
         r = subprocess.run(cmd, shell=True, cwd=REPO, capture_output=True, text=True)
         if r.returncode == 0:
             say(f"    post: {cmd}", quiet)
+            # A post step can succeed and still have something to say (e.g. a
+            # project Cursor uses that no root covers). Swallowing stderr on
+            # success would make that gap invisible again, which is the exact
+            # failure this whole system exists to stop.
+            for line in r.stderr.strip().splitlines():
+                if line.strip():
+                    notes.append(f"{name}: {line.strip()}")
+            for line in r.stdout.strip().splitlines():
+                if line.strip().startswith("linked:"):
+                    changed.append(f"{name} {line.strip()}")
         else:
             problems.append(f"{name} post step failed ({cmd}): "
                             f"{(r.stderr or r.stdout).strip().splitlines()[-1:] or ['?']}")
