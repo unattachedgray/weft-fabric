@@ -133,25 +133,41 @@ def link(target: Path, at: Path, dry: bool) -> None:
 
 
 def ensure_imports(path: Path, imports: list[Path], dry: bool) -> None:
-    """Ensure `path` contains an @<abs> line per import, without touching the rest."""
+    """Ensure `path` opens with our @<abs> imports, in the declared order.
+
+    Order is not cosmetic: the machine-local file is meant to OVERRIDE the
+    shared core, so it has to be read after it. Prepending each missing import
+    put whichever was added last at the top, which inverted that on any machine
+    where the two landed in separate runs.
+
+    Only our own import lines are moved; everything else keeps its position.
+    """
     existing = path.read_text(encoding="utf-8") if path.exists() else ""
     lines = existing.splitlines()
-    missing = [i for i in imports if f"@{i}" not in lines]
-    if not missing:
+    wanted = [f"@{i}" for i in imports]
+    present = [ln for ln in lines if ln in wanted]
+    if present == wanted:
         return
     if dry:
-        for i in missing:
-            changed.append(f"WOULD add @import {tilde(i)} to {tilde(path)}")
+        for i in imports:
+            if f"@{i}" not in lines:
+                changed.append(f"WOULD add @import {tilde(i)} to {tilde(path)}")
+        if present and present != wanted:
+            changed.append(f"WOULD reorder @imports in {tilde(path)} (shared core must come first)")
         return
     path.parent.mkdir(parents=True, exist_ok=True)
+    body = [ln for ln in lines if ln not in wanted]
+    while body and not body[0].strip():
+        body.pop(0)
     if not existing:
-        body = "".join(f"@{i}\n\n" for i in imports)
-        path.write_text(body + "<!-- machine-local additions below are never synced -->\n", encoding="utf-8")
-    else:
-        # Prepend only what is missing; never reorder or delete existing content.
-        path.write_text("".join(f"@{i}\n" for i in missing) + "\n" + existing, encoding="utf-8")
-    for i in missing:
-        changed.append(f"added @import {tilde(i)} to {tilde(path)}")
+        body = ["<!-- machine-local additions below are never synced -->"]
+    text = "\n".join(wanted) + "\n\n" + "\n".join(body).rstrip("\n") + "\n"
+    path.write_text(text, encoding="utf-8")
+    for i in imports:
+        if f"@{i}" not in lines:
+            changed.append(f"added @import {tilde(i)} to {tilde(path)}")
+    if present and present != wanted:
+        changed.append(f"reordered @imports in {tilde(path)} (shared core first, machine-local overrides it)")
 
 
 def tilde(p: Path) -> str:
