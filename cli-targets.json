@@ -12,13 +12,16 @@
     "                     lines; agentsync adds them without touching other content.",
     "machine_local: true means this CLI ALSO needs ~/.config/agents/MACHINE.md.",
     "         Import-capable CLIs get it as a second @import. Symlink CLIs cannot",
-    "         import, so they reach it via the pointer in principles/AGENTS.md."
+    "         import, so they reach it via the pointer in principles/AGENTS.md.",
+    "post:    shell commands run from the repo root after a detected CLI is linked. For wiring a CLI needs that a symlink cannot express. Must be idempotent."
   ],
-
   "clis": [
     {
       "name": "claude",
-      "detect": ["command -v claude", "test -d $HOME/.claude"],
+      "detect": [
+        "command -v claude",
+        "test -d $HOME/.claude"
+      ],
       "instructions": "$HOME/.claude/CLAUDE.md",
       "method": "import",
       "machine_local": true,
@@ -28,7 +31,10 @@
     },
     {
       "name": "codex",
-      "detect": ["command -v codex", "test -d $HOME/.codex"],
+      "detect": [
+        "command -v codex",
+        "test -d $HOME/.codex"
+      ],
       "instructions": "$HOME/.codex/AGENTS.md",
       "method": "symlink",
       "machine_local": true,
@@ -36,7 +42,11 @@
     },
     {
       "name": "gemini",
-      "detect": ["command -v gemini", "command -v agy", "test -d $HOME/.gemini"],
+      "detect": [
+        "command -v gemini",
+        "command -v agy",
+        "test -d $HOME/.gemini"
+      ],
       "instructions": "$HOME/.gemini/AGENTS.md",
       "method": "symlink",
       "machine_local": true,
@@ -44,16 +54,26 @@
     },
     {
       "name": "cursor",
-      "detect": ["command -v cursor-agent", "command -v cursor", "test -d $HOME/.cursor"],
+      "detect": [
+        "command -v cursor-agent",
+        "command -v cursor",
+        "test -d $HOME/.cursor"
+      ],
       "instructions": "$HOME/AGENTS.md",
       "method": "symlink",
       "machine_local": true,
       "skills_dir": null,
-      "note": "No global instruction file of its own; walks ancestors for AGENTS.md, so $HOME covers every project. Skills come from the other CLIs' dirs - see ARRANGEMENT.md."
+      "note": "No global instruction file: verified by probing cursor-agent. It walks ancestors for AGENTS.md, so ~/AGENTS.md covers projects UNDER $HOME but nothing outside it. `post` installs a project-level .cursor/rules symlink for repos under ~/dev, which also covers repos whose own AGENTS.md belongs to another tool. Projects outside $HOME still need it installed explicitly.",
+      "post": [
+        "scripts/install-cursor-rule.sh --all"
+      ]
     },
     {
       "name": "dsh",
-      "detect": ["command -v dsh", "test -d $HOME/.dsh"],
+      "detect": [
+        "command -v dsh",
+        "test -d $HOME/.dsh"
+      ],
       "instructions": "$HOME/.dsh/AGENTS.md",
       "method": "symlink",
       "machine_local": true,

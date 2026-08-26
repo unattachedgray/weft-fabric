@@ -228,6 +228,17 @@ def sync_cli(cli: dict, dry: bool, quiet: bool) -> bool:
         for src in sorted(p for p in PORTABLE.iterdir() if p.is_dir()):
             link(src, sk / src.name, dry)
 
+    for cmd in cli.get("post", []):
+        if dry:
+            changed.append(f"WOULD run post step for {name}: {cmd}")
+            continue
+        r = subprocess.run(cmd, shell=True, cwd=REPO, capture_output=True, text=True)
+        if r.returncode == 0:
+            say(f"    post: {cmd}", quiet)
+        else:
+            problems.append(f"{name} post step failed ({cmd}): "
+                            f"{(r.stderr or r.stdout).strip().splitlines()[-1:] or ['?']}")
+
     st = expand(cli.get("output_styles_dir"))
     if st and STYLES.is_dir():
         for src in sorted(STYLES.glob("*/skills/*/output-styles/*.md")):
