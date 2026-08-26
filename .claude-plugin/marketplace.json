@@ -32,7 +32,7 @@
     {
       "name": "devops",
       "source": "./plugins/devops",
-      "description": "CI/CD, containerization, deployment, GitHub workflow automation, shell scripting. Includes Docker (multi-stage builds, hardening, Compose), Vercel + Next.js deployment, and Bash/Linux terminal patterns."
+      "description": "Browser and machine operations: authenticated Firefox control, Reddit research through an armed tab, Facebook comment exports, LAN access, privileged commands, setup wizards, and deployment tooling."
     },
     {
       "name": "frontend",

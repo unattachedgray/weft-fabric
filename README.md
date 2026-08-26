@@ -83,7 +83,7 @@ Plugins use commit-SHA versioning — every push to this repo bumps the version 
 | [`workflow`](plugins/workflow/) | 7 | Project-agnostic dev lifecycle, builds, evals, persona switching, planning, brainstorming, full-stack scaffolding from natural language. |
 | [`frontend`](plugins/frontend/) | 10 | React + Next.js, Tailwind v4, design systems, mobile-first, browser automation, theme application, accessibility/WIG, text-aware layout via pretext. |
 | [`backend`](plugins/backend/) | 8 | Node.js / TypeScript microservices, system architecture, schema design, API integration, type-level TS, JS fundamentals, Bun. |
-| [`devops`](plugins/devops/) | 5 | CI/CD, containers, Vercel + Next.js, GitHub workflow automation, Bash/Linux patterns. |
+| [`devops`](plugins/devops/) | 6 | Authenticated Firefox control and Reddit research, Facebook comment exports, LAN and sudo access, setup wizards, and deployment tooling. |
 | [`claude-stack`](plugins/claude-stack/) | 3 | Anthropic ecosystem — Claude API / Agent SDK, MCP servers, Gemini CLI for big-context review, advanced prompt engineering. |
 | [`ai-agents`](plugins/ai-agents/) | 5 | Building autonomous agents: architecture, memory, multi-agent orchestration, local CLI agent management, AGENTS.md/CLAUDE.md refactoring. |
 | [`ai-ml`](plugins/ai-ml/) | 3 | Data science, data engineering, LangChain for LLM apps with agents/RAG/tool calling. |
