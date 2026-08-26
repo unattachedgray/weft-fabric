@@ -30,6 +30,8 @@ A change that is obviously right for one CLI is frequently wrong for another,
 and the failure is silent: nobody notices a skill went missing from a CLI they
 weren't using that day. That has already happened twice — see §2 and §1.
 
+**How this layout gets onto a machine and stays right — including troubleshooting — is in [FLEET.md](FLEET.md).** This file covers what the layout is and why it is owner-governed.
+
 Canonical location: `/home/julian/dev/claude-skills`
 Remote: `github.com/unattachedgray/claude-skills`
 

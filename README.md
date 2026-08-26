@@ -2,6 +2,8 @@
 
 A [Claude Code](https://docs.anthropic.com/en/docs/claude-code/skills) **plugin marketplace** (`unatt`) — curated skills for development, AI/ML, content, business, and ops, plus a meta-skill framework (`skill-detectors`) that surfaces context-conditional skills automatically.
 
+> **New machine, new CLI, or something wired wrong?** See **[FLEET.md](FLEET.md)** — how config reaches every machine, and how to fix it.
+
 ## Fresh machine (one command)
 
 The repo is public, so no auth is needed. Clone it, then run `bootstrap.sh` — it syncs the shared
