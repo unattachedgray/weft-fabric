@@ -20,6 +20,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -234,6 +235,77 @@ def sync_cli(cli: dict, dry: bool, quiet: bool) -> bool:
     return True
 
 
+TRUST_CFG = Path.home() / ".config" / "agents" / "trust-github"
+BEGIN = "# >>> agentsync: keys from github.com/{who} — managed, do not edit >>>"
+END = "# <<< agentsync: end github.com/{who} <<<"
+
+
+def sync_github_trust(dry: bool, quiet: bool) -> None:
+    """Authorize the SSH keys published on a GitHub account.
+
+    GitHub serves an account's public keys at https://github.com/<user>.keys.
+    That turns 'add the new machine's key to GitHub once' into 'every machine
+    trusts it within the hour' — no key copying, no owner host involved, and it
+    works on a box nothing can reach yet.
+
+    Opt in per machine by writing the account name(s) to
+    ~/.config/agents/trust-github, one per line. Absent file = feature off.
+
+    TRADE-OFF, on purpose and stated plainly: whoever controls that GitHub
+    account can then SSH to every machine that opted in. Only enable it for an
+    account with 2FA that you control.
+    """
+    try:
+        accounts = [a.strip() for a in TRUST_CFG.read_text(encoding="utf-8").splitlines()
+                    if a.strip() and not a.strip().startswith("#")]
+    except OSError:
+        return
+    if not accounts:
+        return
+
+    import urllib.request
+    import urllib.error
+
+    ak = Path.home() / ".ssh" / "authorized_keys"
+    original = ak.read_text(encoding="utf-8") if ak.exists() else ""
+    text = original
+    say("github trust:", quiet)
+
+    for who in accounts:
+        if not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})", who):
+            problems.append(f"trust-github: {who!r} is not a valid account name")
+            continue
+        try:
+            with urllib.request.urlopen(f"https://github.com/{who}.keys", timeout=15) as r:
+                fetched = [k.strip() for k in r.read().decode().splitlines() if k.strip().startswith("ssh-")]
+        except (urllib.error.URLError, OSError) as e:
+            notes.append(f"could not fetch keys for {who} ({e}); left authorized_keys alone")
+            continue
+        if not fetched:
+            notes.append(f"github.com/{who} publishes no keys; left authorized_keys alone")
+            continue
+
+        begin, end = BEGIN.format(who=who), END.format(who=who)
+        block = "\n".join([begin, *fetched, end])
+        # Replace only our own managed block; hand-added keys are never touched.
+        pattern = re.compile(re.escape(begin) + r".*?" + re.escape(end), re.DOTALL)
+        if pattern.search(text):
+            text = pattern.sub(block, text)
+        else:
+            text = (text.rstrip("\n") + "\n\n" if text.strip() else "") + block + "\n"
+        say(f"  {who}: {len(fetched)} key(s)", quiet)
+
+    if text == original:
+        return
+    if dry:
+        changed.append("WOULD refresh github-published keys in ~/.ssh/authorized_keys")
+        return
+    ak.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    ak.write_text(text, encoding="utf-8")
+    ak.chmod(0o600)
+    changed.append("refreshed github-published keys in ~/.ssh/authorized_keys")
+
+
 def sync_tools(dry: bool, quiet: bool) -> None:
     """Link repo tools onto PATH. Never clobber a real file we did not link."""
     src = REPO / "tools"
@@ -353,6 +425,7 @@ def main() -> int:
     if skipped:
         say(f"  not installed here: {', '.join(skipped)}", args.quiet)
 
+    sync_github_trust(args.dry_run, args.quiet)
     sync_tools(args.dry_run, args.quiet)
     refresh_marketplace(args.dry_run, args.quiet)
 

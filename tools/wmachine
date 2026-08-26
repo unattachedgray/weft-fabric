@@ -23,6 +23,7 @@ weft repo, the w* tools, or any credential in advance.
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import shutil
 import subprocess
@@ -158,9 +159,131 @@ git -C {REPO_DIR} rev-parse --short HEAD
     return cmd_check(host)
 
 
+def _local_ips() -> set[str]:
+    """Addresses that mean 'this host' — so a registry entry of host=local matches."""
+    out = {"127.0.0.1", "localhost"}
+    r = subprocess.run(["ip", "-o", "addr"], capture_output=True, text=True)
+    for line in r.stdout.splitlines():
+        parts = line.split()
+        if len(parts) > 3 and parts[2] in ("inet", "inet6"):
+            out.add(parts[3].split("/")[0])
+    return out
+
+
+def tailscale_bin() -> str | None:
+    """Return a tailscale CLI that is actually logged in.
+
+    A machine can have more than one (a WSL box sees both its own tailscaled
+    and the Windows host's). Picking the first one on PATH found a logged-out
+    daemon, whose status reports Peer: null rather than failing — so verify
+    the backend is Running instead of trusting that the binary exists.
+    """
+    import json as _j
+    for c in ("tailscale", "/usr/bin/tailscale", "/usr/sbin/tailscale",
+              "/mnt/c/Program Files/Tailscale/tailscale.exe"):
+        if not (shutil.which(c) or Path(c).is_file()):
+            continue
+        try:
+            r = subprocess.run([c, "status", "--json"], capture_output=True, text=True, timeout=20)
+            if r.returncode == 0 and (_j.loads(r.stdout) or {}).get("BackendState") == "Running":
+                return c
+        except (OSError, ValueError, subprocess.TimeoutExpired):
+            continue
+    return None
+
+
+def cmd_discover(do_enroll: bool, days: int) -> int:
+    """Find tailnet machines that are not enrolled yet.
+
+    The tailnet is already an accurate inventory of every machine you own, so
+    there is no second registry to keep in step. Anything online that is not in
+    vault-machines.json is either new or was never finished.
+    """
+    ts = tailscale_bin()
+    if not ts:
+        print("no tailscale CLI found — cannot discover", file=sys.stderr)
+        return 1
+    raw = subprocess.run([ts, "status", "--json"], capture_output=True, text=True, timeout=30)
+    if raw.returncode != 0:
+        print("tailscale status failed", file=sys.stderr)
+        return 1
+    import json as _json
+    data = _json.loads(raw.stdout)
+
+    # Match enrolled machines by RESOLVED ADDRESS, not by name. Registry keys are
+    # ssh aliases ("workstation-wvault") and bear no resemblance to tailnet
+    # hostnames ("venge-ubuntu"), so name matching silently reports everything
+    # as new. `ssh -G` gives the address an alias actually resolves to.
+    known_ips: set[str] = set()
+    registry_path = Path.home() / ".config/weft/vault-machines.json"
+    try:
+        registry = _json.loads(registry_path.read_text())
+    except (OSError, ValueError):
+        registry = {}
+        print(f"note: no registry at {registry_path} — run discover on the owner host "
+              f"for accurate enrolment status\n", file=sys.stderr)
+    for meta in registry.values():
+        alias = (meta or {}).get("host", "")
+        if not alias or alias == "local":
+            known_ips.update(_local_ips())
+            continue
+        g = subprocess.run(["ssh", "-G", alias], capture_output=True, text=True, timeout=15)
+        for line in g.stdout.splitlines():
+            if line.startswith("hostname "):
+                known_ips.add(line.split(None, 1)[1].strip())
+
+    peers = []
+    for p in (data.get("Peer") or {}).values():
+        if p.get("Online"):
+            peers.append((p.get("HostName", "?"), (p.get("TailscaleIPs") or ["?"])[0], p.get("OS", "")))
+    self_ = data.get("Self") or {}
+    peers.append((self_.get("HostName", "?"), (self_.get("TailscaleIPs") or ["?"])[0], self_.get("OS", "") + " (this host)"))
+
+    print(f"{'TAILNET HOST':<26}{'IP':<17}{'OS':<20}{'SSH':<8}ENROLLED")
+    new = []
+    for host, ip, osname in sorted(peers):
+        enrolled = ip in known_ips
+        reachable = "-"
+        if not enrolled and ip != "?":
+            r = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=6",
+                                "-o", "StrictHostKeyChecking=accept-new", ip, "true"],
+                               capture_output=True, timeout=20)
+            reachable = "yes" if r.returncode == 0 else "no"
+            if reachable == "yes":
+                new.append((host, ip))
+        print(f"{host:<26}{ip:<17}{osname:<20}{reachable:<8}{'yes' if enrolled else 'NO'}")
+
+    if not new:
+        print("\nnothing new that is reachable.")
+        return 0
+    print(f"\n{len(new)} unenrolled machine(s) reachable over ssh:")
+    for host, ip in new:
+        alias = re.sub(r"[^A-Za-z0-9-]", "-", host).lower()
+        print(f"  {host}  ->  wmachine enroll {alias}   (add an ssh alias for {ip} first)")
+    if do_enroll:
+        print("\n--enroll given: adding ssh aliases and enrolling")
+        cfg = Path.home() / ".ssh" / "config"
+        for host, ip in new:
+            alias = re.sub(r"[^A-Za-z0-9-]", "-", host).lower()
+            block = (f"\n# added by wmachine discover\nHost {alias}\n    HostName {ip}\n"
+                     f"    User {os.environ.get('USER', 'julian')}\n"
+                     f"    IdentityFile ~/.ssh/id_ed25519\n    ServerAliveInterval 30\n")
+            text = cfg.read_text(encoding="utf-8") if cfg.exists() else ""
+            if f"Host {alias}\n" not in text:
+                cfg.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+                cfg.write_text(text + block, encoding="utf-8")
+                cfg.chmod(0o600)
+                print(f"  added ssh alias {alias} -> {ip}")
+            cmd_enroll(alias, None, True, days)
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="action", required=True)
+    d = sub.add_parser("discover", help="find tailnet machines that are not enrolled")
+    d.add_argument("--enroll", action="store_true", help="add ssh aliases and enrol what it finds")
+    d.add_argument("--days", type=int, default=30)
     e = sub.add_parser("enroll", help="bring a machine up to fleet standard")
     e.add_argument("host")
     e.add_argument("--name", help="vault token name (default <host>-wvault)")
@@ -173,6 +296,8 @@ def main() -> int:
     if not shutil.which("ssh"):
         print("wmachine: ssh not found", file=sys.stderr)
         return 2
+    if a.action == "discover":
+        return cmd_discover(a.enroll, a.days)
     if a.action == "check":
         return cmd_check(a.host)
     return cmd_enroll(a.host, a.name, not a.no_vault, a.days)
