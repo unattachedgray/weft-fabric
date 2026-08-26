@@ -26,9 +26,9 @@ set -euo pipefail
 # Derive the canonical path from this script, never hardcode it — a fleet has
 # other users and other checkout locations.
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-CANON="$REPO/cursor/shared-skill-library.mdc"
+RULES_DIR="$REPO/cursor"
 ROOTS_FILE="$HOME/.config/agents/cursor-roots"
-[ -f "$CANON" ] || { echo "missing canonical rule: $CANON" >&2; exit 1; }
+[ -d "$RULES_DIR" ] || { echo "missing canonical rules dir: $RULES_DIR" >&2; exit 1; }
 
 targets=()
 if [ "${1:-}" = "--all" ]; then
@@ -58,20 +58,22 @@ covered=""
 for t in "${targets[@]}"; do
   [ -d "$t" ] || { echo "  skip (not a dir): $t"; continue; }
   mkdir -p "$t/.cursor/rules"
-  link="$t/.cursor/rules/shared-skill-library.mdc"
-  if [ -L "$link" ] && [ "$(readlink "$link")" = "$CANON" ]; then
-    :
-  elif [ -e "$link" ] && [ ! -L "$link" ]; then
-    # Refuse to clobber a real file. `ln -sfn` force-replaces whatever is at the
-    # path, so a project that had authored its own rule of the same name would
-    # have lost it silently. Found by a cross-architecture panel run, 2026-08-08.
-    echo "  SKIP: $t — $link exists and is a regular file, not our symlink." >&2
-    echo "        Move or delete it, then re-run." >&2
-    continue
-  else
-    ln -sfn "$CANON" "$link"
-    echo "  linked: $t"
-  fi
+  for canon in "$RULES_DIR"/*.mdc; do
+    [ -f "$canon" ] || continue
+    link="$t/.cursor/rules/$(basename "$canon")"
+    if [ -L "$link" ] && [ "$(readlink "$link")" = "$canon" ]; then
+      continue
+    elif [ -e "$link" ] && [ ! -L "$link" ]; then
+      # Refuse to clobber a real file. `ln -sfn` force-replaces whatever is at
+      # the path, so a project that had authored its own rule of the same name
+      # would have lost it silently. Cross-architecture panel run, 2026-08-08.
+      echo "  SKIP: $t — $link exists and is a regular file, not our symlink." >&2
+      echo "        Move or delete it, then re-run." >&2
+      continue
+    fi
+    ln -sfn "$canon" "$link"
+    echo "  linked: $t/$(basename "$canon")"
+  done
   covered="$covered$(printf '%s' "${t#/}" | tr '/' '-')
 "
 done

@@ -1,0 +1,30 @@
+---
+description: The shared operating principles and this machine's local notes. Read both at the start of any non-trivial task.
+alwaysApply: true
+---
+
+# Operating principles — read these two files
+
+Cursor has no global instruction file, and it only walks ancestors for
+`AGENTS.md`, so a project outside `$HOME` sees none of the shared context that
+every other CLI on this machine loads automatically. This rule closes that gap.
+
+**At the start of any non-trivial task, read both of these:**
+
+1. `~/dev/claude-skills/principles/AGENTS.md` — the shared operating
+   principles. Identical on every machine and every CLI (Claude Code, Codex,
+   Gemini, Cursor). It covers how to iterate, when to interrupt the user, how
+   secrets are handled, and the shared skill library.
+
+2. `~/.config/agents/MACHINE.md` — what is true on *this* machine only: which
+   tools are actually installed, which hosts are reachable and how, and which
+   of the shared rules cannot run here. **It overrides anything in the shared
+   file that does not apply locally.**
+
+They are a pair. The first is byte-identical everywhere by design; the second is
+never synced. If a shared rule names a path or command this box does not have,
+the machine file says what to do instead — do not edit the shared file to
+accommodate one machine.
+
+If either path does not exist, say so rather than guessing at the conventions;
+this machine may not be set up yet (`~/dev/claude-skills/bootstrap.sh`).

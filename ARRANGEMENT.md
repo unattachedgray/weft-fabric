@@ -91,6 +91,26 @@ machine wires it up on its next sync. Nothing hardcodes CLI paths any more —
 install` already distributes them over ssh, privately, and they carry the vault
 endpoint and auth header. Minting authority (`wtoken`) stays on the owner host.
 
+### Cursor
+
+Cursor has no global instruction file (probed twice: `~/.cursor/AGENTS.md` and
+`~/.cursor/rules/*.mdc` are invisible). It walks ancestors for `AGENTS.md`, so
+`~/AGENTS.md` covers projects **under `$HOME`** and nothing outside it — a
+project in `/mnt/c` loads none of it.
+
+`cursor/*.mdc` are therefore installed per project, as symlinks, by
+`scripts/install-cursor-rule.sh --all`, which `agentsync` runs as cursor's
+`post` step:
+
+- `shared-skill-library.mdc` — the no-copies contract for editing skills.
+- `shared-principles.mdc` — points at `principles/AGENTS.md` *and*
+  `~/.config/agents/MACHINE.md`, because an `.mdc` cannot import and copying
+  them in would drift.
+
+Roots come from `~/.config/agents/cursor-roots` (machine-local), defaulting to
+`~/dev`. The script also reports Cursor projects no root covers, so the gap is
+visible instead of silent.
+
 **Machine-specific facts do not belong in this repo.** A path, hostname, or
 "tool X is missing here" that is true on one box and false on another must live in
 that box's `~/.config/agents/MACHINE.md`, never in `principles/AGENTS.md` — which
