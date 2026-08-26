@@ -31,18 +31,21 @@ PROBE = r"""
 set -u
 export PATH="$HOME/.local/bin:$HOME/bin:/usr/local/bin:/usr/local/sbin:/snap/bin:/opt/homebrew/bin:$PATH"
 if [ -d ~/dev/claude-skills/.git ]; then
-  git -C ~/dev/claude-skills rev-parse --short HEAD
+  printf 'sha=%s\n' "$(git -C ~/dev/claude-skills rev-parse --short HEAD)"
 else
-  echo NOREPO
+  printf 'sha=NOREPO\n'
 fi
-systemctl --user is-active agentsync.timer 2>/dev/null || echo notimer
-for c in claude codex gemini cursor-agent dsh; do
-  command -v $c >/dev/null 2>&1 && printf '%s ' "$c"
+# is-active PRINTS "inactive" and EXITS non-zero, so a `||` fallback would emit
+# a second line and shift every positional field after it. Capture, then default.
+t=$(systemctl --user is-active agentsync.timer 2>/dev/null || true)
+printf 'timer=%s\n' "${t:-none}"
+c=""
+for x in claude codex gemini cursor-agent dsh; do
+  command -v $x >/dev/null 2>&1 && c="$c $x"
 done
-echo
+printf 'clis=%s\n' "${c# }"
 exit 0
 """
-
 
 def registry() -> dict[str, str]:
     try:
@@ -63,10 +66,10 @@ def probe(name: str, host: str) -> dict:
         if r.returncode != 0:
             out["err"] = "unreachable"
             return out
-        lines = [x.strip() for x in r.stdout.splitlines()]
-        out["sha"] = lines[0] if lines else "?"
-        out["timer"] = lines[1] if len(lines) > 1 else "?"
-        out["clis"] = lines[2] if len(lines) > 2 else ""
+        for line in r.stdout.splitlines():
+            key, _, value = line.strip().partition("=")
+            if key in ("sha", "timer", "clis"):
+                out[key] = value
     except subprocess.TimeoutExpired:
         out["err"] = "timeout"
     except OSError as e:
