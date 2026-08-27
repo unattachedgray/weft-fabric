@@ -31,6 +31,7 @@ CANON = REPO / "principles" / "AGENTS.md"
 PORTABLE = REPO / "principles" / "skills"
 STYLES = REPO / "plugins"
 MANIFEST = REPO / "cli-targets.json"
+RELEASE = REPO / "fabric-release.json"
 MACHINE = Path.home() / ".config" / "agents" / "MACHINE.md"
 
 # A non-interactive ssh session gets a minimal PATH, so CLI detection would
@@ -86,6 +87,21 @@ def validate_manifest(raw: object) -> list[dict]:
             if not isinstance(post, dict) or not all(isinstance(post.get(k), str) and post[k] for k in ("name", "check", "apply")):
                 raise ValueError(f"{name}.post entries require name, check, and apply")
     return raw["clis"]
+
+
+def validate_release(raw: object) -> dict:
+    if not isinstance(raw, dict):
+        raise ValueError("release metadata must be an object")
+    version = raw.get("version")
+    if not isinstance(version, str) or not re.fullmatch(r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)", version):
+        raise ValueError("release version must be numeric SemVer (for example 0.1.0)")
+    protocol = raw.get("fabric_protocol")
+    minimum = raw.get("minimum_fabric_protocol")
+    if not isinstance(protocol, int) or protocol < 1:
+        raise ValueError("fabric_protocol must be a positive integer")
+    if not isinstance(minimum, int) or not 1 <= minimum <= protocol:
+        raise ValueError("minimum_fabric_protocol must be between 1 and fabric_protocol")
+    return raw
 
 
 def plugin_skills_for(cli_name: str) -> list[Path]:
@@ -549,10 +565,11 @@ def main() -> int:
     if not CANON.is_file():
         return boot_failure(f"canonical principles missing: {CANON}", args.json)
     try:
+        release = validate_release(json.loads(RELEASE.read_text(encoding="utf-8")))
         manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
         clis = validate_manifest(manifest)
     except (OSError, json.JSONDecodeError, ValueError) as e:
-        return boot_failure(f"cannot read {MANIFEST}: {e}", args.json)
+        return boot_failure(f"cannot read Fabric release/configuration: {e}", args.json)
 
     say(f"agentsync — {tilde(REPO)}", args.quiet)
     if not args.no_pull:
@@ -574,6 +591,9 @@ def main() -> int:
         state = "error" if problems else ("drifted" if changed else "ok")
         print(json.dumps({
             "protocol": 1, "state": state, "host": os.uname().nodename,
+            "fabric_version": release["version"],
+            "fabric_protocol": release["fabric_protocol"],
+            "minimum_fabric_protocol": release["minimum_fabric_protocol"],
             "repo_fingerprint": repo_fingerprint(), "detected_clis": found,
             "missing_clis": skipped, "changes": changed, "notes": notes,
             "errors": problems, "resources": resource_states,

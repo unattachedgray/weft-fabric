@@ -28,6 +28,7 @@ from pathlib import Path
 REGISTRY = Path.home() / ".config" / "agents" / "fleet.json"
 LEGACY_REGISTRY = Path.home() / ".config" / "weft" / "vault-machines.json"
 REPO_DIR = "~/dev/weft-fabric"
+RELEASE = Path(__file__).resolve().parents[1] / "fabric-release.json"
 
 PROBE = r"""
 set -u
@@ -71,7 +72,8 @@ def registry() -> dict[str, str]:
 
 
 def probe(name: str, host: str) -> dict:
-    out = {"name": name, "host": host, "fingerprint": "?", "timer": "?", "clis": [], "state": "unknown", "err": ""}
+    out = {"name": name, "host": host, "fingerprint": "?", "version": "?",
+           "fabric_protocol": 0, "timer": "?", "clis": [], "state": "unknown", "err": ""}
     try:
         if host == "local":
             r = subprocess.run(["bash", "-s"], input=PROBE, capture_output=True, text=True, timeout=45)
@@ -84,7 +86,9 @@ def probe(name: str, host: str) -> dict:
         payload = json.loads(r.stdout)
         report = payload.get("agentsync") or {}
         out.update(timer=payload.get("timer", "?"), state=report.get("state", "unknown"),
-                   fingerprint=report.get("repo_fingerprint", "?")[:7],
+                   fingerprint=report.get("repo_fingerprint", "?"),
+                   version=report.get("fabric_version", "?"),
+                   fabric_protocol=report.get("fabric_protocol", 0),
                    clis=report.get("detected_clis", []), errors=report.get("errors", []))
     except subprocess.TimeoutExpired:
         out["err"] = "timeout"
@@ -107,21 +111,36 @@ def cmd_status(full: bool) -> int:
         print(f"no machines in {REGISTRY} — enrol one with `wmachine enroll <ssh-host>`", file=sys.stderr)
         return 1
     ref = local_head()
-    print(f"fleet health  (controller {ref})\n")
+    release = json.loads(RELEASE.read_text(encoding="utf-8"))
+    target_version = release["version"]
+    minimum_protocol = release["minimum_fabric_protocol"]
+    print(f"Weft Fabric {target_version} fleet  (controller build {ref})\n")
     with cf.ThreadPoolExecutor(max_workers=8) as pool:
         rows = list(pool.map(lambda kv: probe(*kv), sorted(machines.items())))
 
-    print(f"{'MACHINE':<22}{'HOST':<10}{'CONFIG':<10}{'STATE':<12}{'TIMER':<10}CLIS")
+    print(f"{'MACHINE':<22}{'VERSION':<10}{'BUILD':<9}{'STATE':<12}{'NEEDS':<12}CLIS")
     counts = {"ok": 0, "drifted": 0, "unreachable": 0, "outdated": 0,
               "protocol-error": 0, "error": 0, "unknown": 0, "missing": 0}
     for r in rows:
         if r["err"]:
-            state, fingerprint, timer = r["err"], "-", "-"
+            state, fingerprint, version, needs = r["err"], "-", "-", "reachable"
         else:
-            state, fingerprint, timer = r["state"], r["fingerprint"], r["timer"]
+            state, fingerprint, version = r["state"], r["fingerprint"][:7], r["version"]
+            if r["fabric_protocol"] < minimum_protocol or version == "?":
+                state, needs = "outdated", target_version
+            elif version != target_version:
+                state, needs = "outdated", target_version
+            elif r["fingerprint"][:7] != ref:
+                state, needs = "outdated", "sync"
+            elif state != "ok":
+                needs = "repair"
+            elif r["timer"] != "active":
+                state, needs = "drifted", "timer"
+            else:
+                needs = "current"
         counts[state if state in counts else "unknown"] += 1
         clis = ", ".join(r["clis"]) if full else str(len(r["clis"])) + " detected"
-        print(f"{r['name']:<22}{r['host']:<10}{fingerprint:<10}{state:<12}{timer:<10}{clis}")
+        print(f"{r['name']:<22}{version:<10}{fingerprint:<9}{state:<12}{needs:<12}{clis}")
 
     print()
     summary = "  ".join(f"{k}={v}" for k, v in counts.items() if v)

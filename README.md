@@ -8,8 +8,16 @@ machine. It also contains the `unatt` Claude Code plugin marketplace.
 > **New machine, new CLI, or something wired wrong?** See **[FLEET.md](FLEET.md)** — how config reaches every machine, and how to fix it.
 
 Daily use is one tool: `wagent status`, `wagent sync`, `wagent enroll <host>`,
-and `wagent doctor`. Schemas, adapters, compatibility commands, vault
+`wagent doctor`, and `wagent version`. Schemas, adapters, compatibility commands, vault
 separation, and recovery journals stay behind it.
+
+`wagent status` identifies every machine by Fabric version and exact build, and
+says whether it is current or needs a sync, repair, timer repair, or compatibility
+upgrade.
+
+For a new machine, make SSH reachable and tell an agent to add it. `wagent
+enroll` handles prerequisites, Fabric installation, registration, CLI/skill
+wiring, automatic updates, optional scoped vault access, and verification.
 
 ## Fresh machine (one command)
 

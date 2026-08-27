@@ -175,14 +175,42 @@ def cmd_enroll(host: str, name: str | None, vault: bool, days: int) -> int:
     record_enrollment(name, host, "start", "running")
 
     step(1, "reachability and prerequisites")
-    r = ssh(host, "command -v git >/dev/null && command -v python3 >/dev/null && echo READY || echo MISSING", timeout=60)
+    prerequisite_script = r'''
+set -u
+missing=""
+command -v git >/dev/null || missing="$missing git"
+command -v python3 >/dev/null || missing="$missing python3"
+if [ -z "$missing" ]; then echo READY; exit 0; fi
+
+prefix=""
+if [ "$(id -u)" -ne 0 ]; then
+  if sudo -n true >/dev/null 2>&1; then prefix="sudo -n"; else echo "ADMIN_REQUIRED:$missing"; exit 0; fi
+fi
+if command -v apt-get >/dev/null; then
+  $prefix apt-get update -qq && $prefix apt-get install -y git python3
+elif command -v dnf >/dev/null; then
+  $prefix dnf install -y git python3
+elif command -v pacman >/dev/null; then
+  $prefix pacman -Sy --noconfirm git python
+elif command -v zypper >/dev/null; then
+  $prefix zypper --non-interactive install git python3
+else
+  echo "NO_PACKAGE_MANAGER:$missing"; exit 0
+fi
+command -v git >/dev/null && command -v python3 >/dev/null && echo READY || echo "INSTALL_FAILED:$missing"
+'''
+    r = ssh(host, prerequisite_script, timeout=300)
     if r.returncode != 0:
         record_enrollment(name, host, "prerequisites", "failed", "ssh failed")
         report(BAD, f"ssh to {host} failed — is sshd up and your key installed?")
         return 1
     if "READY" not in r.stdout:
-        record_enrollment(name, host, "prerequisites", "failed", "git or python3 missing")
-        report(BAD, "target lacks git and/or python3 — install them there first")
+        detail = r.stdout.strip().splitlines()[-1] if r.stdout.strip() else "prerequisite check failed"
+        record_enrollment(name, host, "prerequisites", "failed", detail)
+        if detail.startswith("ADMIN_REQUIRED:"):
+            report(BAD, f"administrator approval is required once to install:{detail.split(':', 1)[1]}")
+        else:
+            report(BAD, f"could not install prerequisites automatically ({detail})")
         return 1
     report(OK, "ssh works; git and python3 present")
     record_enrollment(name, host, "prerequisites", "complete")

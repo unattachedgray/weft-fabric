@@ -85,7 +85,25 @@ wagent sync                update every reachable machine
 wagent sync --local        update only this machine
 wagent enroll <host>       completely add a machine
 wagent doctor              explain this machine's live wiring
+wagent version             product version, protocol, and exact Git build
 ```
+
+### Version and build are separate on purpose
+
+`fabric-release.json` contains the human release (`0.1.0`) and the compatibility
+protocol. Every live health report also reads the exact Git commit that produced
+it. `wagent status` compares all three against the controller and reports what
+each machine needs:
+
+- `current` — version, protocol, build, wiring, and timer all match;
+- `sync` — same release label but an older exact build;
+- a version such as `0.2.0` — release or compatibility upgrade required;
+- `repair` — code is current but live wiring drifted;
+- `timer` — code and wiring are current but automatic convergence is not active.
+
+Feature/fix work bumps the SemVer file when it constitutes a release. Every
+commit remains distinguishable even between version bumps, so forgetting a bump
+cannot make stale machines appear current.
 
 Each run, in order:
 
@@ -146,6 +164,20 @@ reviewed `cli-targets.json` adapter entry, after which the fleet converges it.
 ---
 
 ## Adding a machine
+
+### Owner workflow — one handoff
+
+1. Boot the machine and make it reachable with normal SSH or Tailscale SSH.
+2. Authorize the owner host's SSH key.
+3. Ask an agent to add that host to Weft Fabric.
+
+The agent runs `wagent enroll <host>`. Fabric installs `git` and Python 3 when
+they are absent and the target permits non-interactive administration, clones
+the one source, wires every CLI already present, installs hourly convergence,
+adds optional scoped vault access, registers the machine, and verifies the live
+result. If an administrator password is required, that single hidden prompt is
+the only human gate. No agent CLI has to be installed first: a supported CLI
+installed later is detected and wired automatically.
 
 ### Pull-based (preferred — needs nothing but internet)
 

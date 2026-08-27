@@ -32,6 +32,11 @@ class ManifestTests(unittest.TestCase):
         clis = self.agentsync.validate_manifest(raw)
         self.assertEqual([c["name"] for c in clis], ["claude", "codex", "gemini", "cursor", "dsh"])
 
+    def test_release_metadata_is_valid_and_compatible(self):
+        release = self.agentsync.validate_release(json.loads((ROOT / "fabric-release.json").read_text()))
+        self.assertRegex(release["version"], r"^\d+\.\d+\.\d+$")
+        self.assertLessEqual(release["minimum_fabric_protocol"], release["fabric_protocol"])
+
     def test_duplicate_cli_is_rejected_before_reconciliation(self):
         cli = {"name": "codex", "detect": ["true"], "instructions": "/tmp/x", "method": "symlink"}
         with self.assertRaisesRegex(ValueError, "duplicate CLI"):
@@ -79,6 +84,8 @@ class ProtocolTests(unittest.TestCase):
         self.assertIn(report["state"], ("ok", "drifted"))
         self.assertIn("codex", report["detected_clis"])
         self.assertTrue(report["repo_fingerprint"])
+        self.assertEqual(report["fabric_version"], "0.1.0")
+        self.assertGreaterEqual(report["fabric_protocol"], 1)
 
     def test_check_sensor_fires_on_real_missing_wiring(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -97,6 +104,14 @@ class ProtocolTests(unittest.TestCase):
                              capture_output=True, text=True, timeout=30)
         self.assertIn(run.returncode, (0, 2), run.stderr)
         self.assertEqual(json.loads(run.stdout)["protocol"], 1)
+
+    def test_wagent_version_reports_version_protocol_and_build(self):
+        run = subprocess.run([str(ROOT / "tools" / "wagent"), "version", "--json"],
+                             capture_output=True, text=True, timeout=30)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        report = json.loads(run.stdout)
+        self.assertEqual(report["version"], "0.1.0")
+        self.assertTrue(report["build"])
 
 
 class FleetRegistryTests(unittest.TestCase):

@@ -77,6 +77,7 @@ wagent sync                   converge every reachable machine
 wagent sync --local           converge this machine
 wagent enroll <host>          completely add a machine
 wagent doctor                 explain local live wiring
+wagent version                release, compatibility protocol, and build
 
 tools/            symlinked into ~/.local/bin by agentsync
   wagent          the public Weft Fabric command
