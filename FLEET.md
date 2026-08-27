@@ -92,18 +92,19 @@ wagent version             product version, protocol, and exact Git build
 
 ### Version and build are separate on purpose
 
-`fabric-release.json` contains the human release (currently `0.3.0`) and the compatibility
+`fabric-release.json` contains the human release (currently `0.0.1`) and the compatibility
 protocol. Every live health report also reads the exact Git commit that produced
 it. `wagent status` compares all three against the controller and reports what
 each machine needs:
 
 - `current` — version, protocol, build, wiring, and timer all match;
 - `sync` — same release label but an older exact build;
-- a version such as `0.2.0` — release or compatibility upgrade required;
+- a version such as `0.0.2` — release or compatibility upgrade required;
 - `repair` — code is current but live wiring drifted;
 - `timer` — code and wiring are current but automatic convergence is not active.
 
-Feature/fix work bumps the SemVer file when it constitutes a release. Every
+Feature and fix releases use small patch increments (`0.0.1` → `0.0.2`). Reserve
+larger SemVer increments for a genuine compatibility boundary. Every
 commit remains distinguishable even between version bumps, so forgetting a bump
 cannot make stale machines appear current.
 
