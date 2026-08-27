@@ -84,13 +84,14 @@ wagent status              truthful health across all enrolled machines
 wagent sync                update every reachable machine
 wagent sync --local        update only this machine
 wagent enroll <host>       completely add a machine
+wagent secrets ...         list/provision selected credentials by name
 wagent doctor              explain this machine's live wiring
 wagent version             product version, protocol, and exact Git build
 ```
 
 ### Version and build are separate on purpose
 
-`fabric-release.json` contains the human release (`0.1.0`) and the compatibility
+`fabric-release.json` contains the human release (currently `0.2.0`) and the compatibility
 protocol. Every live health report also reads the exact Git commit that produced
 it. `wagent status` compares all three against the controller and reports what
 each machine needs:
@@ -240,6 +241,20 @@ Each enrollment keeps a mode-0600 progress journal under
 `~/.config/agents/enrollments/`. Re-running remains the recovery action; the
 journal makes a partial run say where it stopped.
 
+### Credentials after enrollment
+
+Enrollment mints a separately revocable vault leaf when requested, but never
+duplicates the general secret store. The optional next step is `wagent secrets
+provision <host>`, whose terminal selector displays only credential names and
+scopes. For non-interactive use, `--keys NAME,NAME` makes the grant explicit;
+`--all` includes only portable LLM-provider credentials. Higher-authority and
+machine-specific scopes always require selection by name.
+
+Selected values travel only in SSH standard input—not Git, command arguments,
+logs, journals, or chat. The target merges into its mode-0600 scope files,
+aborts the entire request if any selected name already exists, and reports only
+names and modes on read-back. `--replace` is the explicit overwrite gate.
+
 ---
 
 ## Troubleshooting
@@ -269,8 +284,9 @@ journal makes a partial run say where it stopped.
 - **Machine-specific facts never enter the repo.** They go in `MACHINE.md`.
 - **Convergence pulls; it never commits or pushes.** Publishing stays deliberate.
 - **`--ff-only`, and never over a dirty tree.**
-- **Secrets never travel through git.** `wsecret` for local scopes, `wtoken` for
-  vault tokens, both entered at a hidden prompt or minted on the owner host.
+- **Secrets never travel through git.** `wsecret` for local scopes and explicit
+  name-only SSH provisioning, `wtoken` for vault tokens; neither exposes values
+  in command arguments, logs, journals, or chat.
 - **Mint authority stays on the owner host.** `wtoken` is not distributed.
 - **Drift is reported, not silently repaired.** `agentsync` prints what it
   changed, and post-steps' warnings are surfaced even on success — a repair

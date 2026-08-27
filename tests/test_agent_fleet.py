@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import importlib.machinery
 import importlib.util
 import json
@@ -84,7 +85,8 @@ class ProtocolTests(unittest.TestCase):
         self.assertIn(report["state"], ("ok", "drifted"))
         self.assertIn("codex", report["detected_clis"])
         self.assertTrue(report["repo_fingerprint"])
-        self.assertEqual(report["fabric_version"], "0.1.0")
+        release = json.loads((ROOT / "fabric-release.json").read_text())
+        self.assertEqual(report["fabric_version"], release["version"])
         self.assertGreaterEqual(report["fabric_protocol"], 1)
 
     def test_check_sensor_fires_on_real_missing_wiring(self):
@@ -110,8 +112,59 @@ class ProtocolTests(unittest.TestCase):
                              capture_output=True, text=True, timeout=30)
         self.assertEqual(run.returncode, 0, run.stderr)
         report = json.loads(run.stdout)
-        self.assertEqual(report["version"], "0.1.0")
+        release = json.loads((ROOT / "fabric-release.json").read_text())
+        self.assertEqual(report["version"], release["version"])
         self.assertTrue(report["build"])
+
+
+class SecretProvisioningTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.wsecret = load_script("wsecret_under_test", ROOT / "tools" / "wsecret")
+
+    def test_remote_provisioner_merges_atomically_and_reports_no_values(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = dict(os.environ, HOME=tmp)
+            payload = {"replace": False, "credentials": {
+                "OPENAI_API_KEY": {"scope": "llm", "value": "super-secret-value"},
+            }}
+            run = subprocess.run(
+                ["python3", "-c", self.wsecret.REMOTE_PROVISIONER], input=json.dumps(payload),
+                env=env, capture_output=True, text=True, timeout=30,
+            )
+            self.assertEqual(run.returncode, 0, run.stderr)
+            report = json.loads(run.stdout)
+            self.assertEqual(report["names"], ["OPENAI_API_KEY"])
+            self.assertNotIn("super-secret-value", run.stdout + run.stderr)
+            secret_file = Path(tmp) / ".config/weft/secrets/llm.env"
+            self.assertEqual(secret_file.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(secret_file.read_text(), "OPENAI_API_KEY=super-secret-value\n")
+
+            conflict = subprocess.run(
+                ["python3", "-c", self.wsecret.REMOTE_PROVISIONER], input=json.dumps(payload),
+                env=env, capture_output=True, text=True, timeout=30,
+            )
+            self.assertEqual(conflict.returncode, 3)
+            self.assertEqual(json.loads(conflict.stdout)["conflicts"], ["OPENAI_API_KEY"])
+
+    def test_transport_keeps_values_out_of_ssh_arguments(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "secrets"
+            root.mkdir(parents=True)
+            (root / "llm.env").write_text("OPENAI_API_KEY=never-in-argv\n")
+            (root / "manifest.json").write_text(json.dumps({"OPENAI_API_KEY": {"scope": "llm"}}))
+            response = subprocess.CompletedProcess(
+                [], 0, json.dumps({"ok": True, "names": ["OPENAI_API_KEY"],
+                                   "modes": {"llm.env": "0o600", "manifest.json": "0o600"}}), "",
+            )
+            args = argparse.Namespace(host="laptop", keys="OPENAI_API_KEY", all=False, replace=False)
+            with mock.patch.object(self.wsecret, "ROOT", root), mock.patch.object(
+                self.wsecret.subprocess, "run", return_value=response,
+            ) as run:
+                self.assertEqual(self.wsecret.cmd_provision(args), 0)
+            command = run.call_args.args[0]
+            self.assertNotIn("never-in-argv", " ".join(command))
+            self.assertIn("never-in-argv", run.call_args.kwargs["input"])
 
 
 class FleetRegistryTests(unittest.TestCase):

@@ -17,7 +17,14 @@ upgrade.
 
 For a new machine, make SSH reachable and tell an agent to add it. `wagent
 enroll` handles prerequisites, Fabric installation, registration, CLI/skill
-wiring, automatic updates, optional scoped vault access, and verification.
+linking, scheduled updates, and a separately revocable vault credential. General
+credentials are never copied implicitly. After enrollment, `wagent secrets
+provision <host>` presents a key-name-only selector; automation can use `--keys
+NAME,NAME` or `--all` for all portable provider keys. Machine identities and
+high-authority scopes are excluded from bulk selection and require explicit names.
+Values travel only through SSH standard input,
+existing target names are preserved unless `--replace` is explicit, and read-back
+reports only names and private file modes.
 
 ## Fresh machine (one command)
 

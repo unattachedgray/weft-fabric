@@ -277,6 +277,7 @@ git -C {REPO_DIR} rev-parse --short HEAD
         register_machine(name, host, vault)
         record_enrollment(name, host, "verified", "complete")
         report(OK, "added to fleet inventory")
+        report("note", f"general credentials were not copied; optionally run `wagent secrets provision {host}`")
     return rc
 
 
