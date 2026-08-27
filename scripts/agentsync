@@ -88,6 +88,39 @@ def validate_manifest(raw: object) -> list[dict]:
     return raw["clis"]
 
 
+def plugin_skills_for(cli_name: str) -> list[Path]:
+    """Discover eligible plugin skills from the one canonical tree."""
+    skills: list[Path] = []
+    for manifest in sorted(STYLES.glob("*/skills/*/SKILL.md")):
+        text = manifest.read_text(encoding="utf-8", errors="replace")
+        match = re.search(r"(?m)^clis:\s*(.+?)\s*$", text)
+        if match:
+            allowed = {part.strip() for part in match.group(1).split(",")}
+            if cli_name not in allowed:
+                continue
+        skills.append(manifest.parent)
+    return skills
+
+
+def migrate_repo_links(directory: Path, dry: bool) -> None:
+    """Retarget links through the temporary old checkout alias to canonical paths."""
+    if not directory.is_dir():
+        return
+    old_root = REPO.parent / "claude-skills"
+    for installed in directory.iterdir():
+        if not installed.is_symlink():
+            continue
+        raw = Path(os.readlink(installed))
+        absolute = raw if raw.is_absolute() else installed.parent / raw
+        try:
+            relative = absolute.relative_to(old_root)
+        except ValueError:
+            continue
+        target = REPO / relative
+        if target.exists():
+            link(target, installed, dry)
+
+
 def repo_fingerprint() -> str:
     head = run(["git", "-C", str(REPO), "rev-parse", "HEAD"]).stdout.strip()
     return head or hashlib.sha256(MANIFEST.read_bytes()).hexdigest()
@@ -158,8 +191,14 @@ def arm_hook(dry: bool) -> None:
 
 def link(target: Path, at: Path, dry: bool) -> None:
     """Point `at` at `target` as a symlink. Idempotent."""
-    if at.is_symlink() and at.resolve() == target.resolve():
-        return
+    if at.is_symlink():
+        raw = Path(os.readlink(at))
+        current_target = raw if raw.is_absolute() else at.parent / raw
+        # Compare the declared target, not only the resolved inode. During a
+        # checkout migration an old compatibility symlink resolves to the new
+        # tree, but retaining it would make that alias permanent infrastructure.
+        if current_target == target:
+            return
     if dry:
         changed.append(f"WOULD link {tilde(at)} -> {tilde(target)}")
         return
@@ -283,8 +322,12 @@ def sync_cli(cli: dict, dry: bool, quiet: bool) -> bool:
 
     sk = expand(cli.get("skills_dir"))
     if sk and PORTABLE.is_dir():
+        migrate_repo_links(sk, dry)
         for src in sorted(p for p in PORTABLE.iterdir() if p.is_dir()):
             link(src, sk / src.name, dry)
+        if cli.get("plugin_skills"):
+            for src in plugin_skills_for(name):
+                link(src, sk / src.name, dry)
 
     for adapter in cli.get("post", []):
         cmd = adapter["check"] if dry else adapter["apply"]

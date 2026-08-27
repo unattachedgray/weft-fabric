@@ -8,10 +8,9 @@ enhanced_from:
   - best-practices
   - coding-standards
   - code-reviewer
-clis: codex, gemini, cursor
+clis: codex, gemini, cursor, dsh
 clis-why: Claude Code ships its own /security-review; this is the implementation for CLIs that don't.
 ---
-
 # Security Review
 
 Comprehensive security review skill ensuring all code follows security best practices and identifies potential vulnerabilities before deployment.

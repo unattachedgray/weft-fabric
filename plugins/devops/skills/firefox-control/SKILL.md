@@ -1,7 +1,7 @@
 ---
 name: firefox-control
 description: Inspect and interact with the user's explicitly armed Firefox session through Weft's local browser tunnel (looking_glass.py + the Browser Tunnel extension). Use when an agent must view an authenticated page as rendered in Firefox, open or navigate background tabs, capture DOM and screenshots, execute diagnostic JavaScript, click or type into elements, or debug a live web app or browser extension.
-clis: claude, codex, gemini, cursor
+clis: claude, codex, gemini, cursor, dsh
 clis-why: "THE capability no CLI or model has natively — a live, authenticated Firefox tab. Not redundant with any built-in browser tool: those drive a fresh throwaway browser with no session. Link it into every CLI."
 ---
 # Firefox Control

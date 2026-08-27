@@ -146,7 +146,10 @@ for d in ~/.claude/skills ~/.codex/skills ~/.gemini/config/skills; do
 done
 ```
 
-**Link every skill under its canonical name. Aliases are not free.**
+**Link every skill under its canonical name. Aliases are not free.** Weft
+Fabric now discovers eligible plugin skills on every convergence run for Codex,
+Gemini, and dsh; Claude receives plugins through its marketplace. Adding a skill
+does not require hand-linking it on any machine.
 
 Cursor's discovery surface is the **union of all three directories** — it reads
 `~/.cursor/skills-cursor` *and* `~/.claude/skills` *and* `~/.codex/skills`

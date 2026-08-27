@@ -42,6 +42,30 @@ class ManifestTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "require name, check, and apply"):
             self.agentsync.validate_manifest({"clis": [cli]})
 
+    def test_compatibility_alias_is_relinked_to_canonical_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            canonical = root / "weft-fabric" / "item"
+            canonical.parent.mkdir()
+            canonical.write_text("shared")
+            old_root = root / "claude-skills"
+            old_root.symlink_to(canonical.parent)
+            installed = root / "installed"
+            installed.symlink_to(old_root / "item")
+            self.agentsync.changed.clear()
+            self.agentsync.link(canonical, installed, False)
+            self.assertEqual(installed.readlink(), canonical)
+
+    def test_plugin_skill_eligibility_is_manifest_driven(self):
+        codex = {path.name for path in self.agentsync.plugin_skills_for("codex")}
+        claude = {path.name for path in self.agentsync.plugin_skills_for("claude")}
+        dsh = {path.name for path in self.agentsync.plugin_skills_for("dsh")}
+        self.assertIn("security-review", codex)
+        self.assertNotIn("security-review", claude)
+        self.assertIn("security-review", dsh)
+        self.assertIn("ste", claude)
+        self.assertNotIn("ste", codex)
+
 
 class ProtocolTests(unittest.TestCase):
     def test_check_json_is_live_and_machine_readable(self):
@@ -115,6 +139,7 @@ class FleetRegistryTests(unittest.TestCase):
     def test_machine_name_cannot_escape_journal_directory(self):
         with mock.patch.object(self.wmachine, "check_host", return_value=True):
             self.assertEqual(self.wmachine.cmd_enroll("safe-host", "../../escape", False, 30), 2)
+
 
 
 if __name__ == "__main__":

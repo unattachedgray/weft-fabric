@@ -38,7 +38,8 @@
       "instructions": "$HOME/.codex/AGENTS.md",
       "method": "symlink",
       "machine_local": true,
-      "skills_dir": "$HOME/.codex/skills"
+      "skills_dir": "$HOME/.codex/skills",
+      "plugin_skills": true
     },
     {
       "name": "gemini",
@@ -50,7 +51,8 @@
       "instructions": "$HOME/.gemini/AGENTS.md",
       "method": "symlink",
       "machine_local": true,
-      "skills_dir": "$HOME/.gemini/config/skills"
+      "skills_dir": "$HOME/.gemini/config/skills",
+      "plugin_skills": true
     },
     {
       "name": "cursor",
@@ -81,8 +83,9 @@
       "instructions": "$HOME/.dsh/AGENTS.md",
       "method": "symlink",
       "machine_local": true,
-      "skills_dir": null,
-      "note": "DeepSeek Harness reaches skills by folder pointer, not per-skill symlink."
+      "skills_dir": "$HOME/.dsh/skills",
+      "plugin_skills": true,
+      "note": "Weft Fabric manages explicit per-skill links so additions and removals converge like every other CLI."
     }
   ]
 }

@@ -95,7 +95,7 @@ Each run, in order:
    executable bit.
 3. **ensure `MACHINE.md` exists** — writes a stub from detected facts if absent.
 4. **for each CLI in `cli-targets.json` that is detected**: link its instruction
-   file, link portable skills, run any `post` steps.
+   file, link every eligible portable/plugin skill, run structured adapters.
 5. **refresh github ssh trust** if opted in.
 6. **link `tools/` into `~/.local/bin`**.
 7. **refresh the marketplace** if `claude` is present.
@@ -128,9 +128,11 @@ its next sync with no local edits. Nothing hardcodes CLI paths.
 }
 ```
 
-Undetected CLIs are **skipped, not failed**. Install a CLI whenever you like and
-it wires itself on the next hourly run — verified by creating `~/.dsh` and
-watching `~/.dsh/AGENTS.md` appear with no other action.
+Undetected CLIs are **skipped, not failed**. Install a supported CLI whenever
+you like and it wires itself on the next hourly run. A new skill is discovered
+from the canonical tree and delivered according to its optional `clis:` field;
+there is no per-machine link step. Supporting a previously unknown CLI is one
+reviewed `cli-targets.json` adapter entry, after which the fleet converges it.
 
 ### Per-CLI quirks that cost real debugging time
 

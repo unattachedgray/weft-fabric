@@ -7,10 +7,9 @@ consolidated_from:
   - code-refactoring
   - coding-standards
   - best-practices
-clis: codex, gemini, cursor
+clis: codex, gemini, cursor, dsh
 clis-why: Claude Code has /code-review and /simplify built in; this covers the CLIs that don't.
 ---
-
 # Code Quality
 
 Systematic approach to code review, refactoring, and maintaining high-quality standards across all codebases.

@@ -186,7 +186,12 @@ def cmd_enroll(host: str, name: str | None, vault: bool, days: int) -> int:
     r = ssh(host, f"""
 set -eu
 mkdir -p ~/dev
+if [ ! -e {REPO_DIR} ] && [ -d ~/dev/claude-skills/.git ] && [ ! -L ~/dev/claude-skills ]; then
+  mv ~/dev/claude-skills {REPO_DIR}
+  ln -s {REPO_DIR} ~/dev/claude-skills
+fi
 if [ -d {REPO_DIR}/.git ]; then
+  git -C {REPO_DIR} remote set-url origin {REPO_URL}
   git -C {REPO_DIR} pull --ff-only --quiet 2>/dev/null || echo "  (pull skipped)"
 else
   git clone --quiet {REPO_URL} {REPO_DIR}

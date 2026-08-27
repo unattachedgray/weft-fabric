@@ -1,7 +1,7 @@
 ---
 name: multi-ai-review
 description: Cross-architecture review — send a high-stakes artifact or judgment to the other agent CLIs (Codex, Antigravity, Cursor) for INDEPENDENT inspection, then reconcile the union of their findings. Use only when accuracy matters more than cost and the reviewers can each observe something you cannot. Not a vote.
-clis: claude, codex, gemini, cursor
+clis: claude, codex, gemini, cursor, dsh
 clis-why: Dispatches to the sibling CLIs, so it assumes they are installed. Only Claude runs it as the generator.
 ---
 # Cross-architecture review

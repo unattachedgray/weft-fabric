@@ -51,7 +51,10 @@ if [ "${1:-}" = "--all" ]; then
   [ ${#roots[@]} -gt 0 ] || roots=("$HOME/dev")
   for root in "${roots[@]}"; do
     [ -d "$root" ] || continue
-    for d in "$root"/*/; do [ -d "$d/.git" ] && targets+=("${d%/}"); done
+    for d in "$root"/*/; do
+      [ -L "${d%/}" ] && continue  # compatibility aliases are not projects
+      [ -d "$d/.git" ] && targets+=("${d%/}")
+    done
     # A root can BE the project — Cursor gets opened straight in a home dir as
     # often as in a repo under one. Only claim it if Cursor has actually been
     # used there, so we never litter a tree nobody opens.
