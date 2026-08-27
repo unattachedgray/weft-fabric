@@ -138,17 +138,18 @@ def cmd_sync() -> int:
         cmd = r'''set -eu
 old="$HOME/dev/claude-skills"
 new="$HOME/dev/weft-fabric"
-migrated=0
 if [ ! -e "$new" ] && [ -d "$old/.git" ] && [ ! -L "$old" ]; then
   mv "$old" "$new"
   ln -s "$new" "$old"
-  migrated=1
 fi
 repo="$new"
 [ -d "$repo/.git" ] || repo="$old"
 git -C "$repo" remote set-url origin git@github.com:unattachedgray/weft-fabric.git
-"$repo/tools/wagent" sync --local
-if [ "$migrated" -eq 1 ]; then "$repo/scripts/agentsync" --install-timer; fi
+# An older checkout may predate wagent. Its reconciler can pull the release;
+# only then is it safe to enter through the new front door.
+if [ ! -x "$repo/tools/wagent" ]; then "$repo/scripts/agentsync"; fi
+"$repo/tools/wagent" sync --local --no-pull
+"$repo/scripts/agentsync" --install-timer
 '''
         if host == "local":
             r = subprocess.run(["bash", "-lc", cmd], capture_output=True, text=True, timeout=300)
