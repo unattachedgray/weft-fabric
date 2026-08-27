@@ -144,7 +144,12 @@ if [ ! -e "$new" ] && [ -d "$old/.git" ] && [ ! -L "$old" ]; then
 fi
 repo="$new"
 [ -d "$repo/.git" ] || repo="$old"
-git -C "$repo" remote set-url origin git@github.com:unattachedgray/weft-fabric.git
+# Preserve a working authenticated remote. Leaf machines need no GitHub
+# credential because the content plane is public; fall back to HTTPS when an
+# owner-host SSH remote is not usable there.
+if ! timeout 15 git -C "$repo" ls-remote origin HEAD >/dev/null 2>&1; then
+  git -C "$repo" remote set-url origin https://github.com/unattachedgray/weft-fabric
+fi
 # An older checkout may predate wagent. Its reconciler can pull the release;
 # only then is it safe to enter through the new front door.
 if [ ! -x "$repo/tools/wagent" ]; then "$repo/scripts/agentsync"; fi
