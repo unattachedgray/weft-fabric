@@ -2,8 +2,8 @@
 # bootstrap.sh — onboard a fresh machine in one command.
 #
 # Fresh machine (repo not cloned yet) — the repo is PUBLIC, so no auth needed:
-#   git clone https://github.com/unattachedgray/claude-skills ~/dev/claude-skills \
-#     && ~/dev/claude-skills/bootstrap.sh
+#   git clone https://github.com/unattachedgray/weft-fabric ~/dev/weft-fabric \
+#     && ~/dev/weft-fabric/bootstrap.sh
 #
 # Already cloned: just run ./bootstrap.sh — it is idempotent, so re-run any time.
 #
@@ -17,20 +17,20 @@
 set -euo pipefail
 REPO="$(cd "$(dirname "$0")" && pwd)"
 
-echo "== 1/3  converge this machine with the repo =="
-"$REPO/scripts/agentsync"
+echo "== 1/3  converge this machine with Weft Fabric =="
+"$REPO/tools/wagent" sync --local
 
 echo
 echo "== 2/3  keep it converged (hourly) =="
 "$REPO/scripts/agentsync" --install-timer || \
-  echo "  no systemd --user here — schedule 'scripts/agentsync --quiet' with this platform's scheduler"
+  echo "  no systemd --user here — schedule 'wagent sync --local --quiet' with this platform's scheduler"
 
 echo
 echo "== 3/3  next steps =="
 cat <<'NEXT'
   Machine-local notes:  ~/.config/agents/MACHINE.md   (a stub was created if absent)
-  Check the fleet:      wfleet status
-  Enrol another box:    wmachine enroll <ssh-host>     (from the owner host)
+  Check everything:     wagent status
+  Enrol another box:    wagent enroll <ssh-host>       (from the owner host)
 
   Skills are a command away:
      claude plugin install catalog@unatt       # index of everything available

@@ -27,16 +27,18 @@ from pathlib import Path
 
 REGISTRY = Path.home() / ".config" / "agents" / "fleet.json"
 LEGACY_REGISTRY = Path.home() / ".config" / "weft" / "vault-machines.json"
-REPO_DIR = "~/dev/claude-skills"
+REPO_DIR = "~/dev/weft-fabric"
 
 PROBE = r"""
 set -u
 export PATH="$HOME/.local/bin:$HOME/bin:/usr/local/bin:/usr/local/sbin:/snap/bin:/opt/homebrew/bin:$PATH"
 t=$(systemctl --user is-active agentsync.timer 2>/dev/null || true)
 printf '{"timer":"%s","agentsync":' "${t:-none}"
-if [ -x ~/dev/claude-skills/scripts/agentsync ]; then
-  if ~/dev/claude-skills/scripts/agentsync --help 2>&1 | grep -q -- '--check'; then
-    ~/dev/claude-skills/scripts/agentsync --check --json
+repo=~/dev/weft-fabric
+[ -x "$repo/scripts/agentsync" ] || repo=~/dev/claude-skills
+if [ -x "$repo/scripts/agentsync" ]; then
+  if "$repo/scripts/agentsync" --help 2>&1 | grep -q -- '--check'; then
+    "$repo/scripts/agentsync" --check --json
     rc=$?
     [ "$rc" -eq 0 ] || [ "$rc" -eq 2 ] || exit "$rc"
   else

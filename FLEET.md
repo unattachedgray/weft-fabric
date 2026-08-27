@@ -13,8 +13,8 @@ inferred — where something is a known gap it says so.
 ## The one-sentence model
 
 **Everything shared lives in this repo; everything machine-specific lives in
-`~/.config/agents/MACHINE.md`; a single idempotent command called `agentsync`
-reconciles a machine with both, and runs hourly.**
+`~/.config/agents/MACHINE.md`; one tool called `wagent` reconciles and reports
+the whole fabric, with local convergence running hourly.**
 
 There is deliberately **no separate install path**. The command that sets a
 machine up is the same one that keeps it right, so it is exercised constantly
@@ -57,7 +57,7 @@ install.sh                    one-command bootstrap for a brand-new machine
 ### On a machine
 
 ```
-~/dev/claude-skills/                 the clone. One per machine.
+~/dev/weft-fabric/                 the clone. One per machine.
 ~/.config/agents/MACHINE.md          machine-specific facts. NOT in the repo. Never synced.
 ~/.config/agents/trust-github        opt-in: GitHub accounts whose ssh keys may reach here
 ~/.config/agents/cursor-roots        opt-in: extra trees to install Cursor rules into
@@ -76,15 +76,15 @@ to accommodate one machine; that breaks the others.
 
 ## The convergence loop
 
-`scripts/agentsync` — idempotent, safe on a timer, safe to run by hand.
+The public command is `wagent`; `scripts/agentsync` is its internal,
+idempotent reconciliation engine.
 
 ```
-agentsync                  reconcile, print what changed
-agentsync --dry-run        report drift, change nothing
-agentsync --check --json   authoritative read-only health report (for fleet/UI)
-agentsync --no-pull        reconcile the working tree as-is
-agentsync --quiet          only changes and problems (timer mode)
-agentsync --install-timer  add/refresh the hourly systemd --user timer
+wagent status              truthful health across all enrolled machines
+wagent sync                update every reachable machine
+wagent sync --local        update only this machine
+wagent enroll <host>       completely add a machine
+wagent doctor              explain this machine's live wiring
 ```
 
 Each run, in order:
@@ -148,7 +148,7 @@ watching `~/.dsh/AGENTS.md` appear with no other action.
 ### Pull-based (preferred — needs nothing but internet)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/unattachedgray/claude-skills/main/install.sh \
+curl -fsSL https://raw.githubusercontent.com/unattachedgray/weft-fabric/main/install.sh \
   | TRUST_GITHUB=unattachedgray bash
 ```
 
@@ -167,9 +167,9 @@ hour**. Keys go in a delimited managed block; hand-added keys are never touched.
 ### Push-based (from the owner host, also does the vault)
 
 ```bash
-wmachine enroll <ssh-host>        # add --no-vault to skip minting a token
-wmachine check  <ssh-host>        # read-only: what state is that box in?
-wmachine discover [--enroll]      # tailnet machines that are not enrolled yet
+wagent enroll <ssh-host>          # add --no-vault to skip minting a token
+wagent check  <ssh-host>          # read-only: what state is that box in?
+wagent discover [--enroll]        # tailnet machines that are not enrolled yet
 ```
 
 `wmachine discover` uses the tailnet as the machine inventory — there is no
@@ -185,12 +185,16 @@ Symlinked into `~/.local/bin` by `agentsync`.
 
 | Tool | Runs where | Does |
 |---|---|---|
+| `wagent` | any machine | the public Weft Fabric interface: status, sync, enroll, check, discover, doctor |
 | `wsecret` | any machine | scoped secret registrar; hidden prompt, mode-0600 scope files, `wsecret run <scope> -- cmd` injects one scope into one child |
 | `wtask` | any machine | shared task list. Runs locally if the weft repo is present, else tunnels to the owner host over ssh |
 | `wmachine` | **owner host** | enrol / check / discover machines |
 | `wfleet` | **owner host** | `wfleet status` — who is converged; `wfleet sync` — converge everyone |
 | `wvault` | any machine | vault client. **Not in this repo** — `wtoken install` ships it privately over ssh, and it carries the vault endpoint and auth header |
 | `wtoken` | **owner host only** | mints and revokes vault tokens. Deliberately not distributed |
+
+`agentsync`, `wfleet`, and `wmachine` remain compatibility commands for old
+automation. New instructions and human workflows use only `wagent`.
 
 `wfleet` reads the non-secret inventory at `~/.config/agents/fleet.json`.
 `wmachine enroll` updates it only after verifying the target. During migration,

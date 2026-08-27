@@ -11,7 +11,7 @@ every other CLI on this machine loads automatically. This rule closes that gap.
 
 **At the start of any non-trivial task, read both of these:**
 
-1. `~/dev/claude-skills/principles/AGENTS.md` — the shared operating
+1. `~/dev/weft-fabric/principles/AGENTS.md` — the shared operating
    principles. Identical on every machine and every CLI (Claude Code, Codex,
    Gemini, Cursor). It covers how to iterate, when to interrupt the user, how
    secrets are handled, and the shared skill library.
@@ -27,4 +27,4 @@ the machine file says what to do instead — do not edit the shared file to
 accommodate one machine.
 
 If either path does not exist, say so rather than guessing at the conventions;
-this machine may not be set up yet (`~/dev/claude-skills/bootstrap.sh`).
+this machine may not be set up yet (`~/dev/weft-fabric/bootstrap.sh`).

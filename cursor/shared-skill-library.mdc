@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Shared skill library — read before changing skills or agent instructions
 
-`/home/julian/dev/claude-skills` is the **shared** library for Claude Code,
+`/home/julian/dev/weft-fabric` is the **shared** library for Claude Code,
 Codex, Gemini/Antigravity and Cursor. There is **one copy of everything** and
 every CLI is symlinked to it.
 
@@ -26,5 +26,5 @@ The CLIs also differ in built-ins, so a skill that looks redundant here may be
 the only implementation another CLI has. A skill is redundant only if it is
 redundant *everywhere*.
 
-Full contract: **`/home/julian/dev/claude-skills/ARRANGEMENT.md`** — read it
+Full contract: **`/home/julian/dev/weft-fabric/ARRANGEMENT.md`** — read it
 before any of the above.

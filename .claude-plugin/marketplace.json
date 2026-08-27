@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Curated Claude Code skills + the skill-detectors framework. Plugins use commit-SHA versioning, so every push refreshes consumers on next session start.",
-    "url": "https://github.com/unattachedgray/claude-skills"
+    "url": "https://github.com/unattachedgray/weft-fabric"
   },
   "plugins": [
     {

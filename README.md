@@ -1,13 +1,15 @@
-# claude-skills
+# Weft Fabric
 
-A [Claude Code](https://docs.anthropic.com/en/docs/claude-code/skills) **plugin marketplace** (`unatt`) — curated skills for development, AI/ML, content, business, and ops, plus a meta-skill framework (`skill-detectors`) that surfaces context-conditional skills automatically.
+The shared agent environment: one source keeps user principles, accumulated
+operating experience, skills, tools, and machine-local context available to
+Claude Code, Codex, Gemini, Cursor, dsh, and future CLIs across every enrolled
+machine. It also contains the `unatt` Claude Code plugin marketplace.
 
 > **New machine, new CLI, or something wired wrong?** See **[FLEET.md](FLEET.md)** — how config reaches every machine, and how to fix it.
 
-Daily use is three commands: `agentsync` repairs this machine, `wfleet status`
-reports every machine truthfully, and `wmachine enroll <host>` performs complete
-remote setup. Schemas, adapters, vault separation, and recovery journals stay
-behind those commands.
+Daily use is one tool: `wagent status`, `wagent sync`, `wagent enroll <host>`,
+and `wagent doctor`. Schemas, adapters, compatibility commands, vault
+separation, and recovery journals stay behind it.
 
 ## Fresh machine (one command)
 
@@ -16,8 +18,8 @@ The repo is public, so no auth is needed. Clone it, then run `bootstrap.sh` — 
 marketplace so you can install skills on demand:
 
 ```
-git clone https://github.com/unattachedgray/claude-skills ~/dev/claude-skills \
-  && ~/dev/claude-skills/bootstrap.sh
+git clone https://github.com/unattachedgray/weft-fabric ~/dev/weft-fabric \
+  && ~/dev/weft-fabric/bootstrap.sh
 ```
 
 Re-run `bootstrap.sh` any time to pull the latest and re-sync. Skills that depend on a specific
@@ -51,7 +53,7 @@ Nothing is overwritten; *you* choose what graduates to the shared core versus st
 Add the marketplace once per machine:
 
 ```
-/plugin marketplace add unattachedgray/claude-skills
+/plugin marketplace add unattachedgray/weft-fabric
 ```
 
 Then install plugins selectively (see [Plugins](#plugins) below for what each covers):

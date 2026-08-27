@@ -4,7 +4,6 @@ description: Run commands that need sudo (or any interactive password) by spawni
 clis: claude, codex, gemini
 clis-why: Spawns a real terminal for the password prompt — works anywhere with a desktop session.
 ---
-
 # sudo-run
 
 The Bash tool runs non-interactively, so any `sudo` that needs a password hangs or
@@ -27,7 +26,7 @@ file, and lets you **watch for completion** and read the log to plan next steps.
 Pick a short descriptive name. Use a fresh dir per job so logs don't collide.
 
 ```bash
-SKILL="$HOME/dev/claude-skills/plugins/devops/skills/sudo-run"
+SKILL="$HOME/dev/weft-fabric/plugins/devops/skills/sudo-run"
 JOB=~/.claude/sudo-jobs/<short-name>-$(date +%s)
 mkdir -p "$JOB"
 cat > "$JOB/cmd.sh" <<'EOF'

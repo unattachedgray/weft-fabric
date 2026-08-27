@@ -10,7 +10,7 @@ again rather than needing a transaction: convergence, not installation.
 
 Steps, each verified by reading the result back off the target:
   1  reachable over ssh, and has git + python3
-  2  clone or fast-forward ~/dev/claude-skills
+  2  clone or fast-forward ~/dev/weft-fabric
   3  run agentsync — links every detected CLI, tools, and skills; writes a
      MACHINE.md stub; arms the commit hook
   4  install the hourly agentsync timer
@@ -31,8 +31,8 @@ import sys
 import json
 from pathlib import Path
 
-REPO_URL = "https://github.com/unattachedgray/claude-skills"
-REPO_DIR = "~/dev/claude-skills"
+REPO_URL = "https://github.com/unattachedgray/weft-fabric"
+REPO_DIR = "~/dev/weft-fabric"
 HOST_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 WTOKEN = Path.home() / "dev" / "weft" / "scripts" / "weft" / "wtoken"
 FLEET = Path.home() / ".config" / "agents" / "fleet.json"
@@ -118,12 +118,14 @@ export PATH="$HOME/.local/bin:$HOME/bin:/usr/local/bin:/usr/local/sbin:/snap/bin
 echo "os=$(. /etc/os-release 2>/dev/null && echo "$PRETTY_NAME" || uname -s)"
 echo "git=$(command -v git >/dev/null && echo yes || echo NO)"
 echo "python3=$(command -v python3 >/dev/null && echo yes || echo NO)"
-echo "repo=$([ -d ~/dev/claude-skills/.git ] && git -C ~/dev/claude-skills rev-parse --short HEAD || echo ABSENT)"
+repo=~/dev/weft-fabric
+[ -d "$repo/.git" ] || repo=~/dev/claude-skills
+echo "repo=$([ -d "$repo/.git" ] && git -C "$repo" rev-parse --short HEAD || echo ABSENT)"
 echo "machine_md=$([ -f ~/.config/agents/MACHINE.md ] && echo yes || echo NO)"
 echo "timer=$(systemctl --user is-active agentsync.timer 2>/dev/null || echo none)"
 echo "vault=$([ -f ~/.config/weft/vault-token ] && echo yes || echo NO)"
-if [ -x ~/dev/claude-skills/scripts/agentsync ] && ~/dev/claude-skills/scripts/agentsync --help 2>&1 | grep -q -- '--check'; then
-  report=$(~/dev/claude-skills/scripts/agentsync --check --json); rc=$?
+if [ -x "$repo/scripts/agentsync" ] && "$repo/scripts/agentsync" --help 2>&1 | grep -q -- '--check'; then
+  report=$("$repo/scripts/agentsync" --check --json); rc=$?
   [ "$rc" -eq 0 ] || [ "$rc" -eq 2 ] || exit "$rc"
   printf 'agent_report=%s\n' "$report"
 else

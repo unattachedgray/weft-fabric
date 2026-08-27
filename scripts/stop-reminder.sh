@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Stop-hook reminder: surfaces uncommitted changes in claude-skills so the
+# Stop-hook reminder: surfaces uncommitted changes in weft-fabric so the
 # user (or assistant) is reminded to run `scripts/release.sh` before
 # wandering off.
 #
@@ -36,9 +36,9 @@ if command -v python3 >/dev/null 2>&1; then
   python3 -c "
 import json
 print(json.dumps({
-    'systemMessage': '📦 claude-skills: $parts. Publish with: bash scripts/release.sh \"<message>\"'
+    'systemMessage': '📦 weft-fabric: $parts. Publish with: bash scripts/release.sh \"<message>\"'
 }))
 "
 else
-  printf '{"systemMessage":"claude-skills: %s. Publish with: bash scripts/release.sh \\"<message>\\""}\n' "$parts"
+  printf '{"systemMessage":"weft-fabric: %s. Publish with: bash scripts/release.sh \\"<message>\\""}\n' "$parts"
 fi

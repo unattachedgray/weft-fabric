@@ -2,7 +2,6 @@
 name: skill-audit
 description: Periodic maintenance pass over this skills repo — find skills that are stale, unused, superseded by a Claude Code built-in, or that teach the model things it already knows, and retire them. Use when asked to audit/prune/clean up skills, or on a scheduled maintenance check.
 ---
-
 # Skill audit
 
 A skills repo silts up. Every skill added is permanent by default, nothing
@@ -81,7 +80,7 @@ Everything else is filler, however well written.
 ## Run the pass
 
 ```bash
-cd ~/dev/claude-skills
+cd ~/dev/weft-fabric
 
 # 1. Inventory: size and whether the skill bundles anything.
 for p in plugins/*/; do for s in "$p"skills/*/; do

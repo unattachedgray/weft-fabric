@@ -4,7 +4,6 @@ description: Cross-architecture review — send a high-stakes artifact or judgme
 clis: claude, codex, gemini, cursor
 clis-why: Dispatches to the sibling CLIs, so it assumes they are installed. Only Claude runs it as the generator.
 ---
-
 # Cross-architecture review
 
 Send one artifact to several **architecturally different** agents, let each
@@ -157,7 +156,7 @@ Dispatches in parallel, normalises to one JSON array of
 disagreement surface. Measured: 3 vendors, ~33 s wall clock.
 
 Write the prompt to point at real paths rather than pasting content, e.g.
-*"Audit `~/dev/claude-skills` on disk. Report what you find, with evidence."*
+*"Audit `~/dev/weft-fabric` on disk. Report what you find, with evidence."*
 
 ### CLI invocations — every flag here cost a failure to find
 

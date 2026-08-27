@@ -32,15 +32,15 @@ weren't using that day. That has already happened twice — see §2 and §1.
 
 **How this layout gets onto a machine and stays right — including troubleshooting — is in [FLEET.md](FLEET.md).** This file covers what the layout is and why it is owner-governed.
 
-Canonical location: `/home/julian/dev/claude-skills`
-Remote: `github.com/unattachedgray/claude-skills`
+Canonical location: `/home/julian/dev/weft-fabric`
+Remote: `github.com/unattachedgray/weft-fabric`
 
 ---
 
 ## 1. One copy. Every CLI reaches it by symlink.
 
 ```
-/home/julian/dev/claude-skills/
+/home/julian/dev/weft-fabric/
 ├── plugins/<plugin>/skills/<name>/SKILL.md     the skills
 ├── plugins/<plugin>/skills/<name>/output-styles/*.md   Claude-only output styles
 ├── principles/AGENTS.md                        the shared operating principles
@@ -65,25 +65,30 @@ Remote: `github.com/unattachedgray/claude-skills`
 
 ### Convergence: one command, run constantly
 
-`scripts/agentsync` is the only thing that writes those symlinks. It is
+`wagent` is the one public tool. Its internal reconciler is the only thing that writes those symlinks. It is
 idempotent — every run reconciles this machine with the repo, and a second run
 changes nothing — which is why the same command is the installer, the hourly
 timer, and the repair tool. There is deliberately no separate install path that
 runs once and rots.
 
 ```
-scripts/agentsync              reconcile, print what changed
-scripts/agentsync --dry-run    report drift, change nothing
-scripts/agentsync --check --json  authoritative health protocol for controllers
-scripts/agentsync --install-timer   hourly systemd --user timer
+wagent status                 whole-fleet health
+wagent sync                   converge every reachable machine
+wagent sync --local           converge this machine
+wagent enroll <host>          completely add a machine
+wagent doctor                 explain local live wiring
 
 tools/            symlinked into ~/.local/bin by agentsync
+  wagent          the public Weft Fabric command
   wsecret         scoped secret registrar (stdlib-only, portable)
   wtask           shared task list; runs locally if the weft repo is here,
                   otherwise over ssh to the owner host
   wmachine        enrol a whole machine from the owner host
   wfleet          which machines are converged, and sync them
 ```
+
+The older `agentsync`, `wfleet`, and `wmachine` names are compatibility aliases,
+not separate user interfaces.
 
 `agentsync` is also the only configuration state sensor. Fleet tools and UIs
 consume its versioned JSON check output rather than hardcoding CLI names or
@@ -328,7 +333,7 @@ git commit && git push
   row in `.claude-plugin/marketplace.json`.
 - Claude Code reaches it through the registered marketplace (local path, so repo
   edits are live with no push cycle). Codex/Gemini need a symlink:
-  `ln -s /home/julian/dev/claude-skills/plugins/<plugin>/skills/<name> ~/.codex/skills/<name>`
+  `ln -s /home/julian/dev/weft-fabric/plugins/<plugin>/skills/<name> ~/.codex/skills/<name>`
 - Anything under `principles/skills/` is deployed to **all** CLIs by
   `bash scripts/deploy-principles.sh`.
 

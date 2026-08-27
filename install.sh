@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # install.sh — stand up a new machine with one command, pulling everything.
 #
-#   curl -fsSL https://raw.githubusercontent.com/unattachedgray/claude-skills/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/unattachedgray/weft-fabric/main/install.sh | bash
 #
 # Optionally seed SSH trust at the same time, so the owner host can reach this
 # box afterwards without anyone copying a key around:
@@ -17,8 +17,8 @@
 # Safe to re-run. It converges rather than installs.
 set -euo pipefail
 
-REPO_URL="${REPO_URL:-https://github.com/unattachedgray/claude-skills}"
-REPO_DIR="${REPO_DIR:-$HOME/dev/claude-skills}"
+REPO_URL="${REPO_URL:-https://github.com/unattachedgray/weft-fabric}"
+REPO_DIR="${REPO_DIR:-$HOME/dev/weft-fabric}"
 
 die() { echo "install: $*" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }

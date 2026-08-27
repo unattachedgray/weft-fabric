@@ -4,4 +4,4 @@
 # means copying that file and dropping a shim like this wherever the host's
 # hook mechanism expects one. Keeping the logic here instead would recreate the
 # cross-plugin coupling this consolidation removed.
-exec bash "$HOME/dev/claude-skills/plugins/claude-stack/skills/multi-ai-review/scripts/panel" detect
+exec bash "$HOME/dev/weft-fabric/plugins/claude-stack/skills/multi-ai-review/scripts/panel" detect

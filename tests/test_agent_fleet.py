@@ -68,6 +68,12 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(report["state"], "drifted")
         self.assertTrue(report["changes"], "sensor returned drift without observable evidence")
 
+    def test_wagent_is_the_single_front_door(self):
+        run = subprocess.run([str(ROOT / "tools" / "wagent"), "doctor", "--json"],
+                             capture_output=True, text=True, timeout=30)
+        self.assertIn(run.returncode, (0, 2), run.stderr)
+        self.assertEqual(json.loads(run.stdout)["protocol"], 1)
+
 
 class FleetRegistryTests(unittest.TestCase):
     @classmethod

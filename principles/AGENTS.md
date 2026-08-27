@@ -124,7 +124,7 @@ Two corollaries worth stating plainly:
 
 ## Shared Skill Library
 
-Skills live in ONE place — `/home/julian/dev/claude-skills` — and every CLI
+Skills live in ONE place — `/home/julian/dev/weft-fabric` — and every CLI
 (Claude Code, Codex, Gemini, Cursor) reaches them by **symlink, never a copy**.
 DeepSeek Harness (`dsh`) reads this file too, through `~/.dsh/AGENTS.md`, and
 reaches skills by folder pointer instead of per-skill symlink.
@@ -137,7 +137,7 @@ where you are may be the only implementation another has.
 Therefore: changes to this file, to any skill, or to the linking arrangement are
 **cross-cutting and need the owner's agreement** — not a unilateral call made
 inside one session. Read
-`/home/julian/dev/claude-skills/ARRANGEMENT.md` first.
+`/home/julian/dev/weft-fabric/ARRANGEMENT.md` first.
 
 ## Vocabulary
 
