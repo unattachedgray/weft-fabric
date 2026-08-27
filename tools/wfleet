@@ -4,9 +4,9 @@
 Status is read-only. It asks each machine's own agentsync reconciler for the
 truth instead of duplicating CLI detection and link checks here.
 
-  wfleet status          one line per machine: repo SHA, drift, CLIs, timer
-  wfleet status --full   also list each machine's detected CLIs
-  wfleet sync            run agentsync on every reachable machine
+  wagent status          one line per machine: config, drift, CLIs, timer
+  wagent status --full   also list each machine's detected CLIs
+  wagent sync            converge every reachable machine
 
 Machines come from ~/.config/agents/fleet.json. The old vault registry is read
 as a migration fallback, but vault access is optional and no longer defines
@@ -32,7 +32,11 @@ REPO_DIR = "~/dev/weft-fabric"
 PROBE = r"""
 set -u
 export PATH="$HOME/.local/bin:$HOME/bin:/usr/local/bin:/usr/local/sbin:/snap/bin:/opt/homebrew/bin:$PATH"
-t=$(systemctl --user is-active agentsync.timer 2>/dev/null || true)
+t=$(systemctl --user is-active weft-fabric-sync.timer 2>/dev/null || true)
+if [ -z "$t" ] || [ "$t" = inactive ]; then
+  legacy=$(systemctl --user is-active agentsync.timer 2>/dev/null || true)
+  [ -z "$legacy" ] || t="legacy-$legacy"
+fi
 printf '{"timer":"%s","agentsync":' "${t:-none}"
 repo=~/dev/weft-fabric
 [ -x "$repo/scripts/agentsync" ] || repo=~/dev/claude-skills
@@ -124,7 +128,7 @@ def cmd_status(full: bool) -> int:
     print(summary or "no machines")
     unhealthy = sum(v for k, v in counts.items() if k != "ok")
     if unhealthy:
-        print("run `wfleet sync` to repair reachable drift; unreachable machines retain their last state")
+        print("run `wagent sync` to repair reachable drift; unreachable machines retain their last state")
     return 1 if unhealthy else 0
 
 

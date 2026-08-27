@@ -122,7 +122,12 @@ repo=~/dev/weft-fabric
 [ -d "$repo/.git" ] || repo=~/dev/claude-skills
 echo "repo=$([ -d "$repo/.git" ] && git -C "$repo" rev-parse --short HEAD || echo ABSENT)"
 echo "machine_md=$([ -f ~/.config/agents/MACHINE.md ] && echo yes || echo NO)"
-echo "timer=$(systemctl --user is-active agentsync.timer 2>/dev/null || echo none)"
+t=$(systemctl --user is-active weft-fabric-sync.timer 2>/dev/null || true)
+if [ -z "$t" ] || [ "$t" = inactive ]; then
+  legacy=$(systemctl --user is-active agentsync.timer 2>/dev/null || true)
+  [ -z "$legacy" ] || t="legacy-$legacy"
+fi
+echo "timer=${t:-none}"
 echo "vault=$([ -f ~/.config/weft/vault-token ] && echo yes || echo NO)"
 if [ -x "$repo/scripts/agentsync" ] && "$repo/scripts/agentsync" --help 2>&1 | grep -q -- '--check'; then
   report=$("$repo/scripts/agentsync" --check --json); rc=$?
