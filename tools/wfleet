@@ -156,8 +156,12 @@ if ! timeout 15 git -C "$repo" ls-remote origin HEAD >/dev/null 2>&1; then
 fi
 # An older checkout may predate wagent. Its reconciler can pull the release;
 # only then is it safe to enter through the new front door.
-if [ ! -x "$repo/tools/wagent" ]; then "$repo/scripts/agentsync"; fi
-"$repo/tools/wagent" sync --local --no-pull
+if [ ! -x "$repo/tools/wagent" ]; then
+  "$repo/scripts/agentsync"
+  "$repo/tools/wagent" sync --local --no-pull
+else
+  "$repo/tools/wagent" sync --local
+fi
 "$repo/scripts/agentsync" --install-timer
 '''
         if host == "local":
