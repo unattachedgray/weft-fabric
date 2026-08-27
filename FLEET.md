@@ -81,6 +81,7 @@ to accommodate one machine; that breaks the others.
 ```
 agentsync                  reconcile, print what changed
 agentsync --dry-run        report drift, change nothing
+agentsync --check --json   authoritative read-only health report (for fleet/UI)
 agentsync --no-pull        reconcile the working tree as-is
 agentsync --quiet          only changes and problems (timer mode)
 agentsync --install-timer  add/refresh the hourly systemd --user timer
@@ -99,7 +100,10 @@ Each run, in order:
 6. **link `tools/` into `~/.local/bin`**.
 7. **refresh the marketplace** if `claude` is present.
 
-Exit 0 = converged (with or without changes). Exit 1 = a step failed.
+Exit 0 = converged (with or without changes). Exit 1 = a step failed. In
+`--check` mode, exit 2 means repairable drift was found. JSON protocol version
+1 reports detected CLIs, the configuration fingerprint, drift, notes, errors,
+and adapter states; controllers consume this instead of recreating the checks.
 
 ---
 
@@ -116,7 +120,11 @@ its next sync with no local edits. Nothing hardcodes CLI paths.
   "method": "symlink",        // or "import" for a file that takes @<abs-path> lines
   "machine_local": true,      // also needs MACHINE.md
   "skills_dir": "$HOME/.codex/skills",
-  "post": ["scripts/... "]    // optional: wiring a symlink cannot express
+  "post": [{
+    "name": "project rules",
+    "check": "scripts/... --check", // read-only: 0 healthy, nonzero drift
+    "apply": "scripts/..."          // idempotent repair
+  }]
 }
 ```
 
@@ -184,8 +192,15 @@ Symlinked into `~/.local/bin` by `agentsync`.
 | `wvault` | any machine | vault client. **Not in this repo** — `wtoken install` ships it privately over ssh, and it carries the vault endpoint and auth header |
 | `wtoken` | **owner host only** | mints and revokes vault tokens. Deliberately not distributed |
 
-`wfleet` and `wmachine discover` read `~/.config/weft/vault-machines.json`, which
-only exists on the owner host — they give true answers **only there**.
+`wfleet` reads the non-secret inventory at `~/.config/agents/fleet.json`.
+`wmachine enroll` updates it only after verifying the target. During migration,
+`wfleet` also reads machines missing from that file out of the old vault
+registry. Vault access is an attribute of a machine, not what makes it a fleet
+member.
+
+Each enrollment keeps a mode-0600 progress journal under
+`~/.config/agents/enrollments/`. Re-running remains the recovery action; the
+journal makes a partial run say where it stopped.
 
 ---
 
@@ -222,6 +237,9 @@ only exists on the owner host — they give true answers **only there**.
 - **Drift is reported, not silently repaired.** `agentsync` prints what it
   changed, and post-steps' warnings are surfaced even on success — a repair
   nobody sees is how a machine stays wrong for a month.
+- **One sensor owns configuration truth.** Local checks, SSH fleet checks, and
+  future UIs consume `agentsync --check --json`. Do not hardcode CLI lists or
+  infer live wiring from a Git SHA in a controller.
 
 ---
 

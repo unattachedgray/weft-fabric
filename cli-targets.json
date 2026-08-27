@@ -13,7 +13,7 @@
     "machine_local: true means this CLI ALSO needs ~/.config/agents/MACHINE.md.",
     "         Import-capable CLIs get it as a second @import. Symlink CLIs cannot",
     "         import, so they reach it via the pointer in principles/AGENTS.md.",
-    "post:    shell commands run from the repo root after a detected CLI is linked. For wiring a CLI needs that a symlink cannot express. Must be idempotent."
+    "post:    structured adapters with check/apply commands, for wiring a symlink cannot express. Both commands must be idempotent and check must never write."
   ],
   "clis": [
     {
@@ -65,7 +65,11 @@
       "skills_dir": null,
       "note": "No global instruction file: verified by probing cursor-agent. It walks ancestors for AGENTS.md, so ~/AGENTS.md covers projects UNDER $HOME but nothing outside it. `post` installs a project-level .cursor/rules symlink for repos under ~/dev, which also covers repos whose own AGENTS.md belongs to another tool. Projects outside $HOME still need it installed explicitly.",
       "post": [
-        "scripts/install-cursor-rule.sh --all"
+        {
+          "name": "project rules",
+          "check": "scripts/install-cursor-rule.sh --check --all",
+          "apply": "scripts/install-cursor-rule.sh --all"
+        }
       ]
     },
     {

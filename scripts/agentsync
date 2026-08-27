@@ -17,6 +17,7 @@ Exit codes: 0 converged (with or without changes), 1 a step failed.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -42,6 +43,7 @@ for _extra in (Path.home() / ".local/bin", Path.home() / "bin", Path("/usr/local
 changed: list[str] = []
 problems: list[str] = []
 notes: list[str] = []
+resource_states: list[dict] = []
 
 
 def say(msg: str, quiet: bool) -> None:
@@ -59,6 +61,46 @@ def expand(value: str | None) -> Path | None:
 
 def detects(cmds: list[str]) -> bool:
     return any(subprocess.run(c, shell=True, capture_output=True).returncode == 0 for c in cmds)
+
+
+def validate_manifest(raw: object) -> list[dict]:
+    """Fail closed before any writes when the declarative CLI contract is bad."""
+    if not isinstance(raw, dict) or not isinstance(raw.get("clis"), list):
+        raise ValueError("top level must contain a 'clis' array")
+    allowed_methods = {"symlink", "import"}
+    seen: set[str] = set()
+    for i, cli in enumerate(raw["clis"]):
+        if not isinstance(cli, dict):
+            raise ValueError(f"clis[{i}] must be an object")
+        name = cli.get("name")
+        if not isinstance(name, str) or not re.fullmatch(r"[a-z0-9][a-z0-9_-]*", name):
+            raise ValueError(f"clis[{i}].name is invalid")
+        if name in seen:
+            raise ValueError(f"duplicate CLI name: {name}")
+        seen.add(name)
+        if not isinstance(cli.get("detect"), list) or not cli["detect"] or not all(isinstance(x, str) and x for x in cli["detect"]):
+            raise ValueError(f"{name}.detect must be a non-empty string array")
+        if cli.get("instructions") and cli.get("method") not in allowed_methods:
+            raise ValueError(f"{name}.method must be symlink or import")
+        for post in cli.get("post", []):
+            if not isinstance(post, dict) or not all(isinstance(post.get(k), str) and post[k] for k in ("name", "check", "apply")):
+                raise ValueError(f"{name}.post entries require name, check, and apply")
+    return raw["clis"]
+
+
+def repo_fingerprint() -> str:
+    head = run(["git", "-C", str(REPO), "rev-parse", "HEAD"]).stdout.strip()
+    return head or hashlib.sha256(MANIFEST.read_bytes()).hexdigest()
+
+
+def boot_failure(message: str, json_mode: bool) -> int:
+    if json_mode:
+        print(json.dumps({"protocol": 1, "state": "error", "host": os.uname().nodename,
+                          "detected_clis": [], "missing_clis": [], "changes": [],
+                          "notes": [], "errors": [message], "resources": []}, sort_keys=True))
+    else:
+        print(f"agentsync: {message}", file=sys.stderr)
+    return 1
 
 
 # ---------------------------------------------------------------- git
@@ -244,9 +286,15 @@ def sync_cli(cli: dict, dry: bool, quiet: bool) -> bool:
         for src in sorted(p for p in PORTABLE.iterdir() if p.is_dir()):
             link(src, sk / src.name, dry)
 
-    for cmd in cli.get("post", []):
+    for adapter in cli.get("post", []):
+        cmd = adapter["check"] if dry else adapter["apply"]
         if dry:
-            changed.append(f"WOULD run post step for {name}: {cmd}")
+            r = subprocess.run(cmd, shell=True, cwd=REPO, capture_output=True, text=True)
+            if r.returncode != 0:
+                changed.append(f"WOULD repair {name} {adapter['name']}")
+                resource_states.append({"resource": f"cli:{name}:{adapter['name']}", "state": "drifted"})
+            else:
+                resource_states.append({"resource": f"cli:{name}:{adapter['name']}", "state": "ok"})
             continue
         r = subprocess.run(cmd, shell=True, cwd=REPO, capture_output=True, text=True)
         if r.returncode == 0:
@@ -433,22 +481,28 @@ def install_timer() -> int:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dry-run", action="store_true", help="report drift, change nothing")
+    ap.add_argument("--check", action="store_true", help="read-only health check; exit 2 when drift exists")
+    ap.add_argument("--json", action="store_true", help="emit one machine-readable status object")
     ap.add_argument("--no-pull", action="store_true", help="skip the git pull")
     ap.add_argument("--quiet", action="store_true", help="only report changes and problems")
     ap.add_argument("--install-timer", action="store_true", help="add/refresh the hourly timer, then exit")
     args = ap.parse_args()
+    if args.check:
+        args.dry_run = True
+        args.no_pull = True
+    if args.json:
+        args.quiet = True
 
     if args.install_timer:
         return install_timer()
 
     if not CANON.is_file():
-        print(f"agentsync: canonical principles missing: {CANON}", file=sys.stderr)
-        return 1
+        return boot_failure(f"canonical principles missing: {CANON}", args.json)
     try:
         manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as e:
-        print(f"agentsync: cannot read {MANIFEST}: {e}", file=sys.stderr)
-        return 1
+        clis = validate_manifest(manifest)
+    except (OSError, json.JSONDecodeError, ValueError) as e:
+        return boot_failure(f"cannot read {MANIFEST}: {e}", args.json)
 
     say(f"agentsync — {tilde(REPO)}", args.quiet)
     if not args.no_pull:
@@ -457,8 +511,8 @@ def main() -> int:
     ensure_machine(args.dry_run)
 
     say("CLIs:", args.quiet)
-    found = [c["name"] for c in manifest["clis"] if sync_cli(c, args.dry_run, args.quiet)]
-    skipped = [c["name"] for c in manifest["clis"] if c["name"] not in found]
+    found = [c["name"] for c in clis if sync_cli(c, args.dry_run, args.quiet)]
+    skipped = [c["name"] for c in clis if c["name"] not in found]
     if skipped:
         say(f"  not installed here: {', '.join(skipped)}", args.quiet)
 
@@ -466,6 +520,17 @@ def main() -> int:
     sync_tools(args.dry_run, args.quiet)
     refresh_marketplace(args.dry_run, args.quiet)
 
+    if args.json:
+        state = "error" if problems else ("drifted" if changed else "ok")
+        print(json.dumps({
+            "protocol": 1, "state": state, "host": os.uname().nodename,
+            "repo_fingerprint": repo_fingerprint(), "detected_clis": found,
+            "missing_clis": skipped, "changes": changed, "notes": notes,
+            "errors": problems, "resources": resource_states,
+        }, sort_keys=True))
+        if problems:
+            return 1
+        return 2 if args.check and changed else 0
     if changed:
         print(("would change" if args.dry_run else "changed") + ":")
         for c in changed:
@@ -476,7 +541,9 @@ def main() -> int:
         print(f"note: {n}")
     for p in problems:
         print(f"PROBLEM: {p}", file=sys.stderr)
-    return 1 if problems else 0
+    if problems:
+        return 1
+    return 2 if args.check and changed else 0
 
 
 if __name__ == "__main__":

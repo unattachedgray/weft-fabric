@@ -4,6 +4,11 @@ A [Claude Code](https://docs.anthropic.com/en/docs/claude-code/skills) **plugin 
 
 > **New machine, new CLI, or something wired wrong?** See **[FLEET.md](FLEET.md)** — how config reaches every machine, and how to fix it.
 
+Daily use is three commands: `agentsync` repairs this machine, `wfleet status`
+reports every machine truthfully, and `wmachine enroll <host>` performs complete
+remote setup. Schemas, adapters, vault separation, and recovery journals stay
+behind those commands.
+
 ## Fresh machine (one command)
 
 The repo is public, so no auth is needed. Clone it, then run `bootstrap.sh` — it syncs the shared

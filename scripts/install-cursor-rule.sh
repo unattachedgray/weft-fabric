@@ -23,6 +23,9 @@
 # is exactly the kind of fact that differs per machine.
 set -euo pipefail
 
+CHECK=0
+if [ "${1:-}" = "--check" ]; then CHECK=1; shift; fi
+
 # Derive the canonical path from this script, never hardcode it — a fleet has
 # other users and other checkout locations.
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -31,12 +34,18 @@ ROOTS_FILE="$HOME/.config/agents/cursor-roots"
 [ -d "$RULES_DIR" ] || { echo "missing canonical rules dir: $RULES_DIR" >&2; exit 1; }
 
 targets=()
+all_mode=0
 if [ "${1:-}" = "--all" ]; then
+  all_mode=1
   roots=()
   if [ -f "$ROOTS_FILE" ]; then
     while IFS= read -r line; do
       case "$line" in ''|'#'*) continue ;; esac
-      roots+=("$(eval echo "$line")")
+      case "$line" in
+        '~') roots+=("$HOME") ;;
+        '~/'*) roots+=("$HOME/${line#\~/}") ;;
+        *) roots+=("$line") ;;
+      esac
     done < "$ROOTS_FILE"
   fi
   [ ${#roots[@]} -gt 0 ] || roots=("$HOME/dev")
@@ -52,12 +61,17 @@ if [ "${1:-}" = "--all" ]; then
 else
   targets=("$@")
 fi
-[ ${#targets[@]} -gt 0 ] || { echo "usage: $0 <project-dir>... | --all" >&2; exit 1; }
+if [ ${#targets[@]} -eq 0 ]; then
+  [ "$all_mode" -eq 1 ] && exit 0
+  echo "usage: $0 <project-dir>... | --all" >&2
+  exit 1
+fi
 
 covered=""
+drift=0
 for t in "${targets[@]}"; do
   [ -d "$t" ] || { echo "  skip (not a dir): $t"; continue; }
-  mkdir -p "$t/.cursor/rules"
+  [ "$CHECK" -eq 1 ] || mkdir -p "$t/.cursor/rules"
   for canon in "$RULES_DIR"/*.mdc; do
     [ -f "$canon" ] || continue
     link="$t/.cursor/rules/$(basename "$canon")"
@@ -69,6 +83,12 @@ for t in "${targets[@]}"; do
       # would have lost it silently. Cross-architecture panel run, 2026-08-08.
       echo "  SKIP: $t — $link exists and is a regular file, not our symlink." >&2
       echo "        Move or delete it, then re-run." >&2
+      drift=1
+      continue
+    fi
+    if [ "$CHECK" -eq 1 ]; then
+      echo "  drift: missing link $link" >&2
+      drift=1
       continue
     fi
     ln -sfn "$canon" "$link"
@@ -103,3 +123,5 @@ if [ -d "$HOME/.cursor/projects" ]; then
     echo "        Add their parent dir to $ROOTS_FILE, or run this script on them." >&2
   fi
 fi
+
+[ "$drift" -eq 0 ]

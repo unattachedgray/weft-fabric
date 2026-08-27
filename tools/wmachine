@@ -28,12 +28,15 @@ import re
 import shutil
 import subprocess
 import sys
+import json
 from pathlib import Path
 
 REPO_URL = "https://github.com/unattachedgray/claude-skills"
 REPO_DIR = "~/dev/claude-skills"
 HOST_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 WTOKEN = Path.home() / "dev" / "weft" / "scripts" / "weft" / "wtoken"
+FLEET = Path.home() / ".config" / "agents" / "fleet.json"
+JOURNALS = Path.home() / ".config" / "agents" / "enrollments"
 
 OK, BAD, WARN = "  ok ", "FAIL ", "note "
 
@@ -51,6 +54,51 @@ def step(n: int, title: str) -> None:
 
 def report(status: str, msg: str) -> None:
     print(f"    {status} {msg}")
+
+
+def register_machine(machine_id: str, host: str, vault: bool) -> None:
+    """Record non-secret fleet identity independently of vault authority."""
+    try:
+        raw = json.loads(FLEET.read_text(encoding="utf-8")) if FLEET.exists() else {}
+    except json.JSONDecodeError:
+        raise RuntimeError(f"refusing to overwrite invalid fleet registry: {FLEET}")
+    machines = raw.setdefault("machines", {})
+    machines[machine_id] = {"host": host, "vault": "enrolled" if vault else "not-requested"}
+    raw["version"] = 1
+    FLEET.parent.mkdir(parents=True, exist_ok=True)
+    tmp = FLEET.with_suffix(".tmp")
+    tmp.write_text(json.dumps(raw, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    tmp.chmod(0o600)
+    tmp.replace(FLEET)
+
+
+def record_enrollment(machine_id: str, host: str, step_name: str, state: str, detail: str = "") -> None:
+    """Atomically retain enough progress to explain or resume a partial enrolment."""
+    JOURNALS.mkdir(parents=True, exist_ok=True)
+    path = JOURNALS / f"{machine_id}.json"
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    except json.JSONDecodeError:
+        raw = {}
+    raw.update({"version": 1, "machine": machine_id, "host": host,
+                "last_step": step_name, "state": state})
+    if detail:
+        raw["detail"] = detail[:300]
+    history = raw.setdefault("history", [])
+    history.append({"step": step_name, "state": state})
+    raw["history"] = history[-20:]
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(raw, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    tmp.chmod(0o600)
+    tmp.replace(path)
+
+
+def previous_enrollment(machine_id: str) -> dict:
+    try:
+        raw = json.loads((JOURNALS / f"{machine_id}.json").read_text(encoding="utf-8"))
+        return raw if isinstance(raw, dict) else {}
+    except (OSError, json.JSONDecodeError):
+        return {}
 
 
 def check_host(host: str) -> bool:
@@ -74,9 +122,13 @@ echo "repo=$([ -d ~/dev/claude-skills/.git ] && git -C ~/dev/claude-skills rev-p
 echo "machine_md=$([ -f ~/.config/agents/MACHINE.md ] && echo yes || echo NO)"
 echo "timer=$(systemctl --user is-active agentsync.timer 2>/dev/null || echo none)"
 echo "vault=$([ -f ~/.config/weft/vault-token ] && echo yes || echo NO)"
-for c in claude codex gemini cursor-agent dsh; do
-  command -v $c >/dev/null 2>&1 && printf 'cli=%s\n' "$c"
-done
+if [ -x ~/dev/claude-skills/scripts/agentsync ] && ~/dev/claude-skills/scripts/agentsync --help 2>&1 | grep -q -- '--check'; then
+  report=$(~/dev/claude-skills/scripts/agentsync --check --json); rc=$?
+  [ "$rc" -eq 0 ] || [ "$rc" -eq 2 ] || exit "$rc"
+  printf 'agent_report=%s\n' "$report"
+else
+  echo 'agent_report={"state":"outdated","detected_clis":[]}'
+fi
 exit 0
 """
     r = ssh(host, probe, timeout=60)
@@ -85,13 +137,20 @@ exit 0
         return 1
     print(f"{host}:")
     clis = []
+    agent_state = "unknown"
     for line in r.stdout.splitlines():
-        if line.startswith("cli="):
-            clis.append(line.split("=", 1)[1])
+        if line.startswith("agent_report="):
+            try:
+                report_data = json.loads(line.split("=", 1)[1])
+                clis = report_data.get("detected_clis", [])
+                agent_state = report_data.get("state", "unknown")
+            except json.JSONDecodeError:
+                agent_state = "protocol-error"
         elif "=" in line:
             k, v = line.split("=", 1)
             print(f"    {k:<11} {v}")
     print(f"    {'clis':<11} {', '.join(clis) or 'none detected'}")
+    print(f"    {'agent state':<11} {agent_state}")
     return 0
 
 
@@ -99,17 +158,27 @@ def cmd_enroll(host: str, name: str | None, vault: bool, days: int) -> int:
     if not check_host(host):
         return 2
     name = name or f"{host}-wvault"
+    if not HOST_RE.fullmatch(name):
+        print(f"refused: machine name {name!r} may contain only letters, digits, dot, underscore, and dash", file=sys.stderr)
+        return 2
+    previous = previous_enrollment(name)
+    if previous and previous.get("state") != "complete":
+        print(f"resuming after {previous.get('last_step', 'an earlier step')} ({previous.get('state', 'unknown')})")
     print(f"enrolling {host} as {name}")
+    record_enrollment(name, host, "start", "running")
 
     step(1, "reachability and prerequisites")
     r = ssh(host, "command -v git >/dev/null && command -v python3 >/dev/null && echo READY || echo MISSING", timeout=60)
     if r.returncode != 0:
+        record_enrollment(name, host, "prerequisites", "failed", "ssh failed")
         report(BAD, f"ssh to {host} failed — is sshd up and your key installed?")
         return 1
     if "READY" not in r.stdout:
+        record_enrollment(name, host, "prerequisites", "failed", "git or python3 missing")
         report(BAD, "target lacks git and/or python3 — install them there first")
         return 1
     report(OK, "ssh works; git and python3 present")
+    record_enrollment(name, host, "prerequisites", "complete")
 
     step(2, "clone or update the shared repo")
     r = ssh(host, f"""
@@ -123,23 +192,28 @@ fi
 git -C {REPO_DIR} rev-parse --short HEAD
 """)
     if r.returncode != 0:
+        record_enrollment(name, host, "repository", "failed", r.stderr)
         report(BAD, f"clone/update failed: {r.stderr.strip()[:200]}")
         return 1
     report(OK, f"repo at {r.stdout.strip().splitlines()[-1]}")
+    record_enrollment(name, host, "repository", "complete")
 
     step(3, "converge every CLI on the target")
     r = ssh(host, f"{REPO_DIR}/scripts/agentsync")
     if r.returncode != 0:
+        record_enrollment(name, host, "convergence", "failed", r.stderr or r.stdout)
         report(BAD, f"agentsync failed: {(r.stderr or r.stdout).strip()[:300]}")
         return 1
     for line in r.stdout.splitlines():
         if line.strip():
             report("     ", line.rstrip())
+    record_enrollment(name, host, "convergence", "complete")
 
     step(4, "install the hourly timer")
     r = ssh(host, f"{REPO_DIR}/scripts/agentsync --install-timer")
     report(OK if r.returncode == 0 else WARN,
            (r.stdout or r.stderr).strip().splitlines()[-1] if (r.stdout or r.stderr).strip() else "no scheduler")
+    record_enrollment(name, host, "scheduler", "complete" if r.returncode == 0 else "warning")
 
     if vault:
         step(5, "vault enrollment (mints a scoped token)")
@@ -151,12 +225,19 @@ git -C {REPO_DIR} rev-parse --short HEAD
             for line in (r.stdout or r.stderr).strip().splitlines():
                 report(OK if r.returncode == 0 else BAD, line)
             if r.returncode != 0:
+                record_enrollment(name, host, "vault", "failed", "vault installation failed")
                 return 1
+            record_enrollment(name, host, "vault", "complete")
     else:
         step(5, "vault enrollment skipped (--no-vault)")
 
     step(6, "read back what actually landed")
-    return cmd_check(host)
+    rc = cmd_check(host)
+    if rc == 0:
+        register_machine(name, host, vault)
+        record_enrollment(name, host, "verified", "complete")
+        report(OK, "added to fleet inventory")
+    return rc
 
 
 def _local_ips() -> set[str]:

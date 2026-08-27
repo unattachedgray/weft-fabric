@@ -74,6 +74,7 @@ runs once and rots.
 ```
 scripts/agentsync              reconcile, print what changed
 scripts/agentsync --dry-run    report drift, change nothing
+scripts/agentsync --check --json  authoritative health protocol for controllers
 scripts/agentsync --install-timer   hourly systemd --user timer
 
 tools/            symlinked into ~/.local/bin by agentsync
@@ -83,6 +84,12 @@ tools/            symlinked into ~/.local/bin by agentsync
   wmachine        enrol a whole machine from the owner host
   wfleet          which machines are converged, and sync them
 ```
+
+`agentsync` is also the only configuration state sensor. Fleet tools and UIs
+consume its versioned JSON check output rather than hardcoding CLI names or
+treating a matching Git commit as proof that live wiring is correct.
+CLI-specific exceptions use structured check/apply adapters in
+`cli-targets.json`, never opaque post-install commands.
 
 **Adding a CLI is data, not code.** `cli-targets.json` holds every CLI's
 instruction path, link method, and skills dir. Add an entry, commit, and every

@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """wfleet — is every machine actually converged?
 
-Read-only. Uses the SSH trust and the machine registry that already exist, so
-it needs no new credential and no write access anywhere.
+Status is read-only. It asks each machine's own agentsync reconciler for the
+truth instead of duplicating CLI detection and link checks here.
 
   wfleet status          one line per machine: repo SHA, drift, CLIs, timer
   wfleet status --full   also list each machine's detected CLIs
   wfleet sync            run agentsync on every reachable machine
 
-Machines come from ~/.config/weft/vault-machines.json (the registry wtoken
-already maintains). A machine whose host is "local" is checked in place.
+Machines come from ~/.config/agents/fleet.json. The old vault registry is read
+as a migration fallback, but vault access is optional and no longer defines
+fleet membership. A machine whose host is "local" is checked in place.
 
 Silent drift is the failure mode this exists to kill: a symlink to a stale
 commit resolves exactly like a symlink to a current one, so nothing breaks
@@ -24,54 +25,65 @@ import subprocess
 import sys
 from pathlib import Path
 
-REGISTRY = Path.home() / ".config" / "weft" / "vault-machines.json"
+REGISTRY = Path.home() / ".config" / "agents" / "fleet.json"
+LEGACY_REGISTRY = Path.home() / ".config" / "weft" / "vault-machines.json"
 REPO_DIR = "~/dev/claude-skills"
 
 PROBE = r"""
 set -u
 export PATH="$HOME/.local/bin:$HOME/bin:/usr/local/bin:/usr/local/sbin:/snap/bin:/opt/homebrew/bin:$PATH"
-if [ -d ~/dev/claude-skills/.git ]; then
-  printf 'sha=%s\n' "$(git -C ~/dev/claude-skills rev-parse --short HEAD)"
-else
-  printf 'sha=NOREPO\n'
-fi
-# is-active PRINTS "inactive" and EXITS non-zero, so a `||` fallback would emit
-# a second line and shift every positional field after it. Capture, then default.
 t=$(systemctl --user is-active agentsync.timer 2>/dev/null || true)
-printf 'timer=%s\n' "${t:-none}"
-c=""
-for x in claude codex gemini cursor-agent dsh; do
-  command -v $x >/dev/null 2>&1 && c="$c $x"
-done
-printf 'clis=%s\n' "${c# }"
-exit 0
+printf '{"timer":"%s","agentsync":' "${t:-none}"
+if [ -x ~/dev/claude-skills/scripts/agentsync ]; then
+  if ~/dev/claude-skills/scripts/agentsync --help 2>&1 | grep -q -- '--check'; then
+    ~/dev/claude-skills/scripts/agentsync --check --json
+    rc=$?
+    [ "$rc" -eq 0 ] || [ "$rc" -eq 2 ] || exit "$rc"
+  else
+    printf '{"protocol":0,"state":"outdated","detected_clis":[],"errors":["update shared agent repo"]}\n'
+  fi
+else
+  printf '{"protocol":1,"state":"missing","detected_clis":[],"errors":["agentsync absent"]}\n'
+fi
+printf '}\n'
 """
 
-def registry() -> dict[str, str]:
+def _read_registry(path: Path) -> dict:
     try:
-        data = json.loads(REGISTRY.read_text(encoding="utf-8"))
+        raw = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return {}
-    return {name: meta.get("host", "") for name, meta in data.items() if isinstance(meta, dict)}
+    return raw.get("machines", raw) if isinstance(raw, dict) else {}
+
+
+def registry() -> dict[str, str]:
+    # Fleet identity wins; legacy vault entries only fill migration gaps.
+    data = _read_registry(LEGACY_REGISTRY)
+    data.update(_read_registry(REGISTRY))
+    return {name: meta.get("host", "") for name, meta in data.items()
+            if isinstance(meta, dict) and isinstance(meta.get("host"), str)}
 
 
 def probe(name: str, host: str) -> dict:
-    out = {"name": name, "host": host, "sha": "?", "timer": "?", "clis": "", "err": ""}
+    out = {"name": name, "host": host, "fingerprint": "?", "timer": "?", "clis": [], "state": "unknown", "err": ""}
     try:
         if host == "local":
             r = subprocess.run(["bash", "-s"], input=PROBE, capture_output=True, text=True, timeout=45)
         else:
             r = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", host, "bash -s"],
                                input=PROBE, capture_output=True, text=True, timeout=45)
-        if r.returncode != 0:
+        if r.returncode not in (0, 2):
             out["err"] = "unreachable"
             return out
-        for line in r.stdout.splitlines():
-            key, _, value = line.strip().partition("=")
-            if key in ("sha", "timer", "clis"):
-                out[key] = value
+        payload = json.loads(r.stdout)
+        report = payload.get("agentsync") or {}
+        out.update(timer=payload.get("timer", "?"), state=report.get("state", "unknown"),
+                   fingerprint=report.get("repo_fingerprint", "?")[:7],
+                   clis=report.get("detected_clis", []), errors=report.get("errors", []))
     except subprocess.TimeoutExpired:
         out["err"] = "timeout"
+    except json.JSONDecodeError:
+        out["err"] = "protocol-error"
     except OSError as e:
         out["err"] = str(e)[:40]
     return out
@@ -89,32 +101,29 @@ def cmd_status(full: bool) -> int:
         print(f"no machines in {REGISTRY} — enrol one with `wmachine enroll <ssh-host>`", file=sys.stderr)
         return 1
     ref = local_head()
-    print(f"reference: {ref}  (this checkout)\n")
+    print(f"fleet health  (controller {ref})\n")
     with cf.ThreadPoolExecutor(max_workers=8) as pool:
         rows = list(pool.map(lambda kv: probe(*kv), sorted(machines.items())))
 
-    print(f"{'MACHINE':<22}{'HOST':<10}{'REPO':<10}{'STATE':<12}{'TIMER':<10}CLIS")
-    behind = 0
+    print(f"{'MACHINE':<22}{'HOST':<10}{'CONFIG':<10}{'STATE':<12}{'TIMER':<10}CLIS")
+    counts = {"ok": 0, "drifted": 0, "unreachable": 0, "outdated": 0,
+              "protocol-error": 0, "error": 0, "unknown": 0, "missing": 0}
     for r in rows:
         if r["err"]:
-            state, sha, timer = r["err"], "-", "-"
-        elif r["sha"] == "NOREPO":
-            state, sha, timer = "no repo", "-", r["timer"]
-            behind += 1
-        elif r["sha"] == ref:
-            state, sha, timer = "converged", r["sha"], r["timer"]
+            state, fingerprint, timer = r["err"], "-", "-"
         else:
-            state, sha, timer = "DRIFTED", r["sha"], r["timer"]
-            behind += 1
-        clis = r["clis"] if full else str(len(r["clis"].split())) + " detected"
-        print(f"{r['name']:<22}{r['host']:<10}{sha:<10}{state:<12}{timer:<10}{clis}")
+            state, fingerprint, timer = r["state"], r["fingerprint"], r["timer"]
+        counts[state if state in counts else "unknown"] += 1
+        clis = ", ".join(r["clis"]) if full else str(len(r["clis"])) + " detected"
+        print(f"{r['name']:<22}{r['host']:<10}{fingerprint:<10}{state:<12}{timer:<10}{clis}")
 
     print()
-    if behind:
-        print(f"{behind} machine(s) not at {ref} — `wfleet sync` to converge them")
-    else:
-        print("all reachable machines converged")
-    return 0
+    summary = "  ".join(f"{k}={v}" for k, v in counts.items() if v)
+    print(summary or "no machines")
+    unhealthy = sum(v for k, v in counts.items() if k != "ok")
+    if unhealthy:
+        print("run `wfleet sync` to repair reachable drift; unreachable machines retain their last state")
+    return 1 if unhealthy else 0
 
 
 def cmd_sync() -> int:
