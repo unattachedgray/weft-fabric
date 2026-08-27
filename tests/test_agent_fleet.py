@@ -116,6 +116,30 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(report["version"], release["version"])
         self.assertTrue(report["build"])
 
+    def test_setup_inspection_uses_live_sensor_without_writes(self):
+        run = subprocess.run([str(ROOT / "tools" / "wsetup"), "--inspect"],
+                             capture_output=True, text=True, timeout=30)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertIn("Detected", run.stdout)
+        self.assertIn("Agent CLIs:", run.stdout)
+        self.assertIn("Inspection only; nothing changed.", run.stdout)
+
+    def test_setup_refuses_an_implicit_yes_without_a_terminal(self):
+        run = subprocess.run([str(ROOT / "tools" / "wsetup"), "--no-timer"],
+                             input="", capture_output=True, text=True, timeout=30)
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("confirmation requires a terminal", run.stderr)
+
+    def test_preclone_install_inspection_changes_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "fabric"
+            env = dict(os.environ, REPO_DIR=str(target))
+            run = subprocess.run([str(ROOT / "install.sh"), "--inspect"], env=env,
+                                 capture_output=True, text=True, timeout=30)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertIn("inspection only; nothing changed", run.stdout)
+            self.assertFalse(target.exists())
+
 
 class SecretProvisioningTests(unittest.TestCase):
     @classmethod

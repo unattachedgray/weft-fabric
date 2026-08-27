@@ -1,0 +1,119 @@
+#!/usr/bin/env python3
+"""Guided, state-aware setup for the machine running Weft Fabric.
+
+Detect first, explain the proposed changes, confirm once, converge through the
+same engine used hourly, then read the live state back. No CLI is required.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+
+
+ROOT = Path(__file__).resolve().parents[1]
+AGENTSYNC = ROOT / "scripts" / "agentsync"
+MACHINE = Path.home() / ".config" / "agents" / "MACHINE.md"
+TRUST = Path.home() / ".config" / "agents" / "trust-github"
+SECRETS = Path.home() / ".config" / "weft" / "secrets" / "manifest.json"
+
+
+def sensor() -> tuple[dict, int]:
+    result = subprocess.run([str(AGENTSYNC), "--check", "--json"], capture_output=True, text=True)
+    try:
+        report = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        raise RuntimeError("Fabric's setup sensor did not return valid JSON") from error
+    if result.returncode not in (0, 2):
+        raise RuntimeError("Fabric's setup sensor is not live: " + "; ".join(report.get("errors", [])))
+    return report, result.returncode
+
+
+def ssh_state() -> str:
+    client = shutil.which("ssh") is not None
+    server = shutil.which("sshd") is not None
+    if client and server:
+        return "client + server available"
+    if client:
+        return "client available; server absent (remote management optional)"
+    return "absent (not required for local use)"
+
+
+def secret_count() -> int:
+    try:
+        data = json.loads(SECRETS.read_text(encoding="utf-8"))
+        return len(data) if isinstance(data, dict) else 0
+    except (OSError, json.JSONDecodeError):
+        return 0
+
+
+def show_plan(report: dict, install_timer: bool) -> None:
+    detected = report.get("detected_clis", [])
+    missing = report.get("missing_clis", [])
+    print(f"\nWeft Fabric {report.get('fabric_version', '?')} setup for {report.get('host', '?')}")
+    print("\nDetected")
+    print(f"  Agent CLIs:       {', '.join(detected) or 'none'}")
+    print(f"  Supported later:  {', '.join(missing) or 'all supported CLIs are present'}")
+    print(f"  SSH:              {ssh_state()}")
+    print(f"  Machine notes:    {'present' if MACHINE.is_file() else 'will create a local stub'}")
+    print(f"  SSH trust:        {TRUST.read_text(encoding='utf-8').strip() if TRUST.is_file() else 'not enabled'}")
+    print(f"  Scoped secrets:   {secret_count()} registered name(s); values not inspected")
+    print("\nProposed")
+    print(f"  • {'Repair' if report.get('changes') else 'Verify'} shared principles, tools, and skills for detected CLIs")
+    print("  • Leave unsupported or absent CLIs untouched; a later install is detected automatically")
+    print(f"  • {'Install/refresh hourly convergence' if install_timer else 'Skip scheduled convergence by request'}")
+    print("  • Do not add, copy, or expose credentials")
+    for error in report.get("errors", []):
+        print(f"  ! Existing problem: {error}")
+
+
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--yes", action="store_true", help="apply the detected plan without an interactive gate")
+    parser.add_argument("--inspect", action="store_true", help="show the plan without changing anything")
+    parser.add_argument("--no-timer", action="store_true", help="do not install scheduled convergence")
+    args = parser.parse_args(argv)
+
+    try:
+        before, _ = sensor()
+    except RuntimeError as error:
+        print(f"wsetup: {error}", file=sys.stderr)
+        return 1
+    show_plan(before, not args.no_timer)
+    if args.inspect:
+        print("\nInspection only; nothing changed.")
+        return 0
+    if not args.yes:
+        if not (sys.stdin.isatty() and sys.stdout.isatty()):
+            print("\nwsetup: confirmation requires a terminal; use --yes only after reviewing `wagent setup --inspect`.", file=sys.stderr)
+            return 2
+        answer = input("\nApply this plan? [y/N] ").strip().lower()
+        if answer not in ("y", "yes"):
+            print("Nothing changed.")
+            return 0
+
+    result = subprocess.run([str(AGENTSYNC)])
+    if result.returncode:
+        return result.returncode
+    if not args.no_timer:
+        timer = subprocess.run([str(AGENTSYNC), "--install-timer"])
+        if timer.returncode:
+            print("wsetup: convergence succeeded, but no supported scheduler was installed", file=sys.stderr)
+
+    after, status = sensor()
+    if status != 0 or after.get("changes") or after.get("errors"):
+        print("wsetup: read-back found remaining drift; run `wagent doctor` for details", file=sys.stderr)
+        return 1
+    print(f"\nSetup verified: {', '.join(after.get('detected_clis', [])) or 'Fabric tools only'} are converged.")
+    if after.get("missing_clis"):
+        print("Install any supported CLI whenever useful; Fabric will wire it on the next sync.")
+    print("Secrets remain separate. Use `wagent secrets list` or the guided registrar when needed.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

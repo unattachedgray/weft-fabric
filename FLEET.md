@@ -85,13 +85,14 @@ wagent sync                update every reachable machine
 wagent sync --local        update only this machine
 wagent enroll <host>       completely add a machine
 wagent secrets ...         list/provision selected credentials by name
+wagent setup [--inspect]   detect, explain, confirm, converge, and verify
 wagent doctor              explain this machine's live wiring
 wagent version             product version, protocol, and exact Git build
 ```
 
 ### Version and build are separate on purpose
 
-`fabric-release.json` contains the human release (currently `0.2.0`) and the compatibility
+`fabric-release.json` contains the human release (currently `0.3.0`) and the compatibility
 protocol. Every live health report also reads the exact Git commit that produced
 it. `wagent status` compares all three against the controller and reports what
 each machine needs:
@@ -180,17 +181,26 @@ result. If an administrator password is required, that single hidden prompt is
 the only human gate. No agent CLI has to be installed first: a supported CLI
 installed later is detected and wired automatically.
 
-### Pull-based (preferred — needs nothing but internet)
+### Pull-based guided setup (preferred — needs nothing but internet)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/unattachedgray/weft-fabric/main/install.sh \
-  | TRUST_GITHUB=unattachedgray bash
+bash <(curl -fsSL https://raw.githubusercontent.com/unattachedgray/weft-fabric/main/install.sh)
 ```
 
-Clones, converges every detected CLI, arms the hourly timer, writes a
-`MACHINE.md` stub, and seeds ssh trust.
+The process-substitution form deliberately preserves the terminal for the
+confirmation gate. Fabric detects Git/Python, agent CLIs, SSH client/server,
+machine notes, timer state, SSH trust, and only the number of scoped credential
+names. It explains what is required, what is optional, and what it will change
+before asking once. Then it clones, converges every detected CLI, arms the
+hourly timer, writes a `MACHINE.md` stub, and reads the live sensor back.
 
-`TRUST_GITHUB` is the trick that removes the manual key copy: GitHub publishes an
+No CLI or SSH server is a prerequisite. If the owner already prepared them,
+Fabric detects and uses them. If not, setup calls them out as optional and they
+are automatically wired on a later hourly pass. `wagent setup --inspect` is
+read-only; prepared automation must say `--yes` explicitly, because EOF is never
+consent.
+
+`TRUST_GITHUB` remains an explicit opt-in that removes the manual key copy: GitHub publishes an
 account's public keys at `https://github.com/<user>.keys`, so a brand-new box can
 authorize the owner host from a public URL with nobody logged in. It is refreshed
 hourly, so **adding a key to GitHub once means every machine trusts it within the
@@ -220,7 +230,7 @@ Symlinked into `~/.local/bin` by `agentsync`.
 
 | Tool | Runs where | Does |
 |---|---|---|
-| `wagent` | any machine | the public Weft Fabric interface: status, sync, enroll, check, discover, doctor |
+| `wagent` | any machine | the public Weft Fabric interface: setup, status, sync, enroll, check, discover, doctor |
 | `wsecret` | any machine | scoped secret registrar; hidden prompt, mode-0600 scope files, `wsecret run <scope> -- cmd` injects one scope into one child |
 | `wtask` | any machine | shared task list. Runs locally if the weft repo is present, else tunnels to the owner host over ssh |
 | `wmachine` | **owner host** | enrol / check / discover machines |

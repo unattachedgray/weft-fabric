@@ -7,6 +7,7 @@
   wagent check <ssh-host>      inspect one machine
   wagent discover [--enroll]   find new tailnet machines
   wagent secrets ...           list/provision credentials by name, never value
+  wagent setup [--inspect]     detect, explain, confirm, converge, and verify
   wagent doctor [--json]       inspect this machine's live wiring
   wagent version [--json]      product version, protocol, and exact build
 
@@ -25,6 +26,7 @@ AGENTSYNC = ROOT / "scripts" / "agentsync"
 WFLEET = ROOT / "tools" / "wfleet"
 WMACHINE = ROOT / "tools" / "wmachine"
 WSECRET = ROOT / "tools" / "wsecret"
+WSETUP = ROOT / "tools" / "wsetup"
 FLEET = Path.home() / ".config" / "agents" / "fleet.json"
 LEGACY_FLEET = Path.home() / ".config" / "weft" / "vault-machines.json"
 RELEASE = ROOT / "fabric-release.json"
@@ -93,6 +95,8 @@ def main() -> int:
         return run([str(WMACHINE), action, *args])
     if action == "secrets":
         return run([str(WSECRET), *args])
+    if action == "setup":
+        return run([str(WSETUP), *args])
     print(f"wagent: unknown command {action!r}\n\n{__doc__.strip()}", file=sys.stderr)
     return 2
 

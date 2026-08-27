@@ -7,7 +7,7 @@ machine. It also contains the `unatt` Claude Code plugin marketplace.
 
 > **New machine, new CLI, or something wired wrong?** See **[FLEET.md](FLEET.md)** — how config reaches every machine, and how to fix it.
 
-Daily use is one tool: `wagent status`, `wagent sync`, `wagent enroll <host>`,
+Daily use is one tool: `wagent setup`, `wagent status`, `wagent sync`, `wagent enroll <host>`,
 `wagent doctor`, and `wagent version`. Schemas, adapters, compatibility commands, vault
 separation, and recovery journals stay behind it.
 
@@ -26,19 +26,30 @@ Values travel only through SSH standard input,
 existing target names are preserved unless `--replace` is explicit, and read-back
 reports only names and private file modes.
 
-## Fresh machine (one command)
+## Fresh machine
 
-The repo is public, so no auth is needed. Clone it, then run `bootstrap.sh` — it syncs the shared
-[operating principles](#cross-agent-principles) into every agent CLI **and** registers this skills
-marketplace so you can install skills on demand:
+The repo is public, so no auth is needed. Fabric can be the first thing installed:
+
+```
+bash <(curl -fsSL https://raw.githubusercontent.com/unattachedgray/weft-fabric/main/install.sh)
+```
+
+It detects required system tools, installed agent CLIs, SSH readiness, machine
+notes, scheduler state, and credential-name count. It then shows the exact plan
+and waits for one confirmation before changing anything. No agent CLI or SSH
+server is required for local setup: absent supported CLIs are listed as optional
+and are automatically wired whenever installed later.
+
+If Git and Python are already present, cloning first reaches the same guided path:
 
 ```
 git clone https://github.com/unattachedgray/weft-fabric ~/dev/weft-fabric \
   && ~/dev/weft-fabric/bootstrap.sh
 ```
 
-Re-run `bootstrap.sh` any time to pull the latest and re-sync. Skills that depend on a specific
-agent/tool simply stay inert until that tool is installed — safe to share and carry everywhere.
+Prepared automation can inspect with `wagent setup --inspect` and explicitly use
+`--yes`; an EOF or pipe is never treated as consent. Re-run `wagent setup` any
+time to inspect, confirm, converge, and verify through the normal Fabric sensor.
 
 ### Consolidating a machine that already has its own principles
 

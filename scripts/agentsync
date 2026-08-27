@@ -161,7 +161,8 @@ def git_pull(dry: bool, quiet: bool) -> None:
         return
     before = run(["git", "-C", str(REPO), "rev-parse", "HEAD"]).stdout.strip()
     if dry:
-        run(["git", "-C", str(REPO), "fetch", "--quiet"])
+        # A health sensor must not write. The fleet controller compares exact
+        # builds; remote update discovery belongs to sync, not --check.
         behind = run(["git", "-C", str(REPO), "rev-list", "--count", "HEAD..@{u}"]).stdout.strip()
         if behind and behind != "0":
             changed.append(f"WOULD pull {behind} commit(s)")
