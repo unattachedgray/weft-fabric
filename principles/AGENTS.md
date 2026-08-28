@@ -122,6 +122,15 @@ Two corollaries worth stating plainly:
   call that would do it properly. The principle is about decisions you have
   measured, not about avoiding models on principle.
 
+## Serious Research Includes Reddit
+
+For every serious research task, invoke the `reddit-research` skill and include
+practitioner evidence from Reddit when a relevant discussion exists. Reddit is
+one evidence layer, not a substitute for primary sources, official documentation,
+local verification, or reproducible measurements. Keep Reddit claims labeled as
+practitioner reports, verify locally when possible, and state when the required
+armed browser path is unavailable or the search finds no relevant evidence.
+
 ## Shared Skill Library
 
 Skills live in ONE place — `/home/julian/dev/weft-fabric` — and every CLI
