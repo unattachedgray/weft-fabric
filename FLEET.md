@@ -47,7 +47,7 @@ principles/skills/<name>/     portable skills for every CLI
 plugins/<name>/               Claude Code marketplace plugins (commit-SHA versioned)
 cursor/*.mdc                  Cursor project rules (it has no global file — see below)
 cli-targets.json              every CLI's paths, as DATA
-tools/                        wsecret, wtask, wmachine, wfleet
+tools/                        wsecret, wtask, wmachine, wfleet, updateall
 scripts/agentsync             the convergence command
 scripts/install-cursor-rule.sh   Cursor's per-project wiring (agentsync runs it)
 hooks/pre-commit              SKILL.md validation (agentsync arms it)
@@ -236,6 +236,7 @@ Symlinked into `~/.local/bin` by `agentsync`.
 | `wtask` | any machine | shared task list. Runs locally if the weft repo is present, else tunnels to the owner host over ssh |
 | `wmachine` | **owner host** | enrol / check / discover machines |
 | `wfleet` | **owner host** | `wfleet status` — who is converged; `wfleet sync` — converge everyone |
+| `updateall` | any machine | one command to update every package manager present — apt, dnf, snap, flatpak, global npm, pipx, brew, fwupd, and a report of a newer distro release. Big items (major bumps, firmware, removals, release upgrades) are asked about while the ordinary updates keep running; unanswered ones are left undone. Asks for the sudo password only when sudo needs one. `sudo updateall` needs a one-time `sudo ln -s ~/.local/bin/updateall /usr/local/bin/updateall` per machine, since sudo's `secure_path` excludes `~/.local/bin` |
 | `wvault` | any machine | vault client. **Not in this repo** — `wtoken install` ships it privately over ssh, and it carries the vault endpoint and auth header |
 | `wtoken` | **owner host only** | mints and revokes vault tokens. Deliberately not distributed |
 

@@ -1,0 +1,472 @@
+#!/usr/bin/env bash
+# updateall — refresh every package manager present on this machine.
+#
+# One tool for every box in the fabric: each backend runs only when its command
+# exists, so an Ubuntu workstation takes the apt/snap/pipx/brew path and a
+# Fedora WSL box takes the dnf/npm path from this same file. agentsync links it
+# into ~/.local/bin. For 'sudo updateall' to resolve as well, sudo's secure_path
+# needs a one-time symlink on each machine:
+#     sudo ln -s ~/.local/bin/updateall /usr/local/bin/updateall
+#
+# Ordinary updates run unattended, one backend after another. Anything big —
+# a major-version bump of a global tool, a firmware flash, removing orphaned
+# packages, a distro release upgrade — is never applied silently: the question
+# is put to you the moment it is found, the ordinary updates carry on while you
+# decide, the approved big items run at the end, and if you never answer they
+# are simply left undone.
+#
+#   updateall            update everything; ask about the big items
+#   updateall -i         interactive: confirm every transaction inline instead
+#   updateall -n         dry run: list what would be updated, change nothing
+#   updateall -q         quiet: only print backends that had updates
+#   updateall -b         batch: never ask, hold every big item (implied when
+#                        there is no terminal to ask at, e.g. cron)
+#   updateall -a         pre-approve removing orphaned packages (dnf autoremove)
+#   updateall -f         pre-approve firmware (fwupd) updates
+#   updateall -m         pre-approve major bumps of global npm packages
+#   updateall -r         pre-approve a distro release upgrade
+#   UPDATEALL_ASK_TIMEOUT   seconds to keep waiting for an answer once all the
+#                           ordinary updates are done (default 120)
+set -u
+
+DRY=0; ASK=0; QUIET=0; BATCH=0; PRE_RM=0; PRE_FW=0; PRE_NPM=0; PRE_REL=0
+while getopts "inqbafmryh" o; do
+    case "$o" in
+        i) ASK=1 ;;
+        n) DRY=1 ;;
+        q) QUIET=1 ;;
+        b) BATCH=1 ;;
+        a) PRE_RM=1 ;;
+        f) PRE_FW=1 ;;
+        m) PRE_NPM=1 ;;
+        r) PRE_REL=1 ;;
+        y) : ;;   # unattended is already the default; kept for old habits
+        *) sed -n '2,/^set -u/p' "$0" | sed '$d; s/^# \{0,1\}//'; exit 0 ;;
+    esac
+done
+
+BOLD=$'\e[1m'; DIM=$'\e[2m'; GRN=$'\e[32m'; YLW=$'\e[33m'; RED=$'\e[31m'; RST=$'\e[0m'
+[ -t 1 ] || BOLD= DIM= GRN= YLW= RED= RST=
+
+have() { command -v "$1" >/dev/null 2>&1; }
+head_() { printf '\n%s== %s ==%s\n' "$BOLD" "$1" "$RST"; }
+note()  { [ "$QUIET" = 1 ] || printf '%s%s%s\n' "$DIM" "$1" "$RST"; }
+run()   { if [ "$DRY" = 1 ]; then printf '%s[dry] %s%s\n' "$YLW" "$*" "$RST"; else "$@"; fi; }
+
+declare -a UPDATED=() SKIPPED=() FAILED=() PENDING=()
+
+# Confirmation flags: -i hands each transaction back to you, otherwise every
+# backend runs unattended.
+Y=(); [ "$ASK" = 1 ] || Y=(-y)
+
+# WSL has no offline-update boot target and no firmware to flash, so a couple
+# of steps below take a different route. /proc/version is the reliable probe:
+# sudo strips WSL_DISTRO_NAME from the environment.
+WSL=0
+grep -qi microsoft /proc/version 2>/dev/null && WSL=1
+
+WORK=$(mktemp -d) || exit 1
+ERRF=$WORK/err
+mkdir -p "$WORK/q" "$WORK/a"
+cleanup() {
+    [ -n "${ASKER_PID:-}" ] && kill "$ASKER_PID" 2>/dev/null
+    [ -n "${SUDO_KEEPALIVE:-}" ] && kill "$SUDO_KEEPALIVE" 2>/dev/null
+    rm -rf "$WORK"
+}
+trap cleanup EXIT
+
+# ---------- sudo ----------
+# One prompt for the whole run, and only when sudo really wants a password:
+# 'sudo -v' is not a usable probe, since it prompts even under NOPASSWD when
+# some other sudoers entry for the user requires one. The timestamp is then
+# refreshed in the background so a long apt/dnf phase cannot expire it.
+SUDO=
+if [ "$(id -u)" -ne 0 ]; then
+    SUDO=sudo
+    if [ "$DRY" = 1 ]; then
+        SUDO="sudo -n"   # never prompt in a dry run; root-only steps degrade to notes
+    else
+        if ! sudo -n true 2>/dev/null; then
+            if [ ! -t 0 ]; then
+                echo "${RED}sudo needs a password and there is no terminal to type it into${RST}" >&2
+                echo "run updateall from a terminal, or as 'sudo updateall'" >&2
+                exit 1
+            fi
+            sudo -v || { echo "${RED}sudo authentication failed${RST}" >&2; exit 1; }
+        fi
+        ( while kill -0 "$$" 2>/dev/null; do sudo -n true 2>/dev/null; sleep 50; done ) &
+        SUDO_KEEPALIVE=$!
+    fi
+else
+    note "running as root: user-scoped installs (flatpak --user, ~/.npm-global) are not visible"
+fi
+
+# ---------- the big-item question queue ----------
+# A big item is queued with a label, the word that approves it, and the
+# command to run. One background asker owns /dev/tty and works through the
+# queue in order while the ordinary backends keep going; approved items run
+# in the 'deferred' section at the end. Without a terminal (or with -b/-n),
+# nothing is asked and every big item is held.
+CAN_ASK=0
+if [ "$DRY" = 0 ] && [ "$BATCH" = 0 ] && [ "$ASK" = 0 ] && [ -t 0 ] && [ -t 1 ] && [ -r /dev/tty ] && [ -w /dev/tty ]; then
+    CAN_ASK=1
+fi
+declare -a Q_TAG=() Q_LABEL=() Q_WORD=() Q_CMD=() Q_STATE=()   # state: pre | ask | held | later
+ASKER_PID=
+
+asker() {
+    exec 0</dev/tty 1>/dev/tty 2>&1
+    local i=0
+    while :; do
+        if [ -f "$WORK/q/$i" ]; then
+            local word; word=$(sed -n '1p' "$WORK/q/$i")
+            printf '\n%s?%s %s\n' "$YLW" "$RST" "$(sed -n '2,$p' "$WORK/q/$i")"
+            printf "  type '%s' to approve, 'n' to skip, Enter to decide later: " "$word"
+            local ans=
+            IFS= read -r ans || ans=
+            if [ "$ans" = "$word" ]; then echo yes
+            elif [ -z "$ans" ]; then echo later
+            else echo no; fi >"$WORK/a/$i"
+            i=$((i + 1))
+        elif [ -f "$WORK/done" ]; then
+            exit 0
+        else
+            sleep 0.3
+        fi
+    done
+}
+
+# queue_big <tag> <label> <approve-word> <pre-approved 0|1> <command...>
+queue_big() {
+    local tag=$1 label=$2 word=$3 pre=$4; shift 4
+    local i=${#Q_LABEL[@]}
+    local cmd; cmd=$(printf '%q ' "$@")
+    Q_TAG+=("$tag"); Q_LABEL+=("$label"); Q_WORD+=("$word"); Q_CMD+=("$cmd")
+    if [ "$pre" = 1 ]; then
+        Q_STATE+=(pre)
+        note "  approved in advance; runs at the end"
+    elif [ "$ASK" = 1 ]; then
+        # -i: ask inline, right here, the same way every transaction is asked
+        printf '%s?%s %s\n' "$YLW" "$RST" "$label"
+        printf "  type '%s' to approve, 'n' to skip, Enter to decide later: " "$word"
+        local ans=; IFS= read -r ans </dev/tty || ans=
+        if [ "$ans" = "$word" ]; then Q_STATE+=(pre)
+        elif [ -z "$ans" ]; then Q_STATE+=(later)
+        else Q_STATE+=(declined); fi
+    elif [ "$CAN_ASK" = 1 ]; then
+        Q_STATE+=(ask)
+        printf '%s\n%s\n' "$word" "$label" >"$WORK/q/$i"
+        if [ -z "$ASKER_PID" ]; then asker & ASKER_PID=$!; fi
+    else
+        Q_STATE+=(held)
+        [ "$DRY" = 1 ] && printf '%s[dry] would ask, then: %s%s\n' "$YLW" "$cmd" "$RST"
+    fi
+}
+
+# ---------- apt ----------
+if have apt-get; then
+    head_ apt
+    # The dpkg frontend lock is the only reliable busy signal: the
+    # unattended-upgrade-shutdown waiter is always resident on Ubuntu,
+    # so a process-name check would skip apt on every run.
+    if $SUDO fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; then
+        echo "${YLW}another apt/dpkg process holds the lock — skipping apt${RST}"
+        SKIPPED+=(apt)
+    else
+        if ! $SUDO apt-get update -qq 2>/dev/null; then
+            if [ "$DRY" = 1 ]; then note "apt: no sudo in dry run, using cached lists"
+            else FAILED+=("apt update"); fi
+        fi
+        n=$(apt-get -s upgrade 2>/dev/null | grep -c '^Inst ' || true)
+        if [ "${n:-0}" -gt 0 ]; then
+            echo "$n package(s) upgradable"
+            apt-get -s upgrade 2>/dev/null | awk '/^Inst /{print "  " $2}'
+            run $SUDO apt-get "${Y[@]}" full-upgrade && UPDATED+=("apt ($n)") || FAILED+=(apt)
+            [ "$DRY" = 1 ] || $SUDO apt-get -y autoremove --purge -qq
+        else
+            note "apt: nothing to do"
+        fi
+    fi
+fi
+
+# ---------- dnf ----------
+if have dnf; then
+    head_ dnf
+    # The rpmdb lock is the only reliable busy signal — a process-name check
+    # would match this script's own command line.
+    if $SUDO fuser /var/lib/rpm/.rpm.lock >/dev/null 2>&1; then
+        echo "${YLW}another dnf/rpm process holds the rpmdb lock — skipping dnf${RST}"
+        SKIPPED+=(dnf)
+    else
+        # --assumeno so a missing repo signing key can never block the check on
+        # a y/N prompt; the upgrade below is what may import one.
+        pending=$($SUDO dnf -q --refresh --assumeno check-upgrade 2>"$ERRF"); rc=$?
+        if [ "$DRY" = 1 ] && [ "$rc" -ne 0 ] && [ "$rc" -ne 100 ]; then
+            note "dnf: no sudo in dry run, checking against the user metadata cache"
+            pending=$(dnf -q --refresh --assumeno check-upgrade 2>"$ERRF"); rc=$?
+        fi
+        if grep -qiE 'signing key not found|signature verification error' "$ERRF"; then
+            echo "${YLW}a repo signing key is missing from dnf's keyring:${RST}"
+            grep -iE 'signing key|signature verification' "$ERRF" | sed 's/^/  /' | head -4
+            echo "  ${DIM}that repo is being skipped; import its key once with"
+            echo "  'sudo dnf makecache --refresh' and answer the fingerprint prompt${RST}"
+        fi
+        n=$(printf '%s\n' "$pending" | grep -cE '^[^[:space:]]+\.[^[:space:]]+[[:space:]]' || true)
+        if [ "${n:-0}" -gt 0 ]; then
+            echo "$n package(s) upgradable"
+            printf '%s\n' "$pending" | sed 's/^/  /'
+            run $SUDO dnf "${Y[@]}" upgrade && UPDATED+=("dnf ($n)") || FAILED+=(dnf)
+        elif [ "$rc" -eq 0 ]; then
+            note "dnf: nothing to do"
+        else
+            sed 's/^/  /' "$ERRF" >&2
+            FAILED+=("dnf check")
+        fi
+
+        # Orphaned dependencies are a removal, not an upgrade: a big item.
+        orphans=$(dnf -q -C repoquery --unneeded 2>/dev/null | grep . || true)
+        if [ -n "$orphans" ]; then
+            cnt=$(printf '%s\n' "$orphans" | wc -l)
+            printf '%s%s orphaned package(s) no longer required:%s\n' "$YLW" "$cnt" "$RST"
+            printf '%s\n' "$orphans" | sed 's/^/  /'
+            queue_big autoremove "remove $cnt orphaned package(s) (dnf autoremove)" y "$PRE_RM" $SUDO dnf -y autoremove
+        fi
+    fi
+fi
+
+# ---------- snap ----------
+if have snap; then
+    head_ snap
+    pending=$(snap refresh --list 2>/dev/null | tail -n +2)
+    if [ -n "$pending" ]; then
+        printf '%s\n' "$pending" | awk '{print "  " $1 " -> " $2}'
+        run $SUDO snap refresh && UPDATED+=("snap ($(printf '%s\n' "$pending" | wc -l))") || FAILED+=(snap)
+    else
+        note "snap: all snaps up to date"
+    fi
+fi
+
+# ---------- flatpak ----------
+if have flatpak; then
+    head_ flatpak
+    if ! flatpak list --columns=application 2>/dev/null | grep -q .; then
+        note "flatpak: nothing installed"
+    else
+        pending=$(flatpak remote-ls --updates 2>"$ERRF")
+        if [ -n "$pending" ]; then
+            printf '%s\n' "$pending" | awk -F'\t' '{print "  " $1}'
+            y=(); [ "$ASK" = 1 ] || y=(--noninteractive)
+            run flatpak update "${y[@]}" && UPDATED+=("flatpak ($(printf '%s\n' "$pending" | wc -l))") || FAILED+=(flatpak)
+            [ "$DRY" = 1 ] || flatpak uninstall --unused --noninteractive >/dev/null 2>&1
+        elif grep -q . "$ERRF"; then
+            # WSL has no polkit agent, so an OCI remote like Fedora's cannot be
+            # summarised there at all. Report it; do not call it a failure.
+            echo "${YLW}flatpak: could not query remotes${RST}"
+            sed 's/^/  /' "$ERRF" | head -3
+            SKIPPED+=(flatpak)
+        else
+            note "flatpak: nothing to do"
+        fi
+    fi
+fi
+
+# ---------- npm globals ----------
+if have npm; then
+    head_ npm
+    # 'npm outdated' exits 1 when anything is outdated, so its status is not an
+    # error signal here. Columns: name current wanted latest.
+    pending=$(npm outdated -g --depth=0 2>/dev/null | awk 'NR>1 && NF>=4 {print $1, $2, $4}')
+    if [ -n "$pending" ]; then
+        prefix=$(npm prefix -g 2>/dev/null)
+        NSUDO=$SUDO; [ -w "${prefix:-/usr/local}/lib/node_modules" ] && NSUDO=
+        ok=1; done_n=0
+        while read -r pkg cur new_; do
+            [ -n "$pkg" ] || continue
+            # A global npm package is usually a long-running tool (pm2's daemon,
+            # a CLI in a script), so a major bump is a big item: it can leave a
+            # running daemon a version behind its own CLI.
+            if [ "${cur%%.*}" != "${new_%%.*}" ]; then
+                echo "  $pkg $cur -> $new_ ${YLW}(major)${RST}"
+                queue_big "npm $pkg" "npm: $pkg $cur -> $new_ is a major-version bump" y "$PRE_NPM" \
+                    $NSUDO npm install -g --no-fund --no-audit "$pkg@$new_"
+                continue
+            fi
+            echo "  $pkg $cur -> $new_"
+            run $NSUDO npm install -g --no-fund --no-audit "$pkg@$new_" || ok=0
+            done_n=$((done_n + 1))
+        done <<<"$pending"
+        if [ "$done_n" -gt 0 ]; then
+            [ "$ok" = 1 ] && UPDATED+=("npm ($done_n)") || FAILED+=(npm)
+        fi
+    else
+        note "npm: global packages up to date"
+    fi
+fi
+
+# ---------- pipx ----------
+if have pipx; then
+    head_ pipx
+    if [ "$DRY" = 1 ]; then
+        pipx list --short 2>/dev/null | sed 's/^/  /'
+        note "pipx: would run 'pipx upgrade-all'"
+    else
+        out=$(pipx upgrade-all 2>&1); rc=$?
+        if [ $rc -ne 0 ]; then echo "$out"; FAILED+=(pipx)
+        elif printf '%s\n' "$out" | grep -q 'upgraded'; then printf '%s\n' "$out" | grep 'upgraded' | sed 's/^/  /'; UPDATED+=(pipx)
+        else note "pipx: nothing to do"; fi
+    fi
+fi
+
+# ---------- Homebrew (Linuxbrew) ----------
+if have brew; then
+    head_ brew
+    brew update >/dev/null 2>&1
+    pending=$(brew outdated 2>/dev/null)
+    if [ -n "$pending" ]; then
+        printf '%s\n' "$pending" | sed 's/^/  /'
+        run brew upgrade && UPDATED+=("brew ($(printf '%s\n' "$pending" | wc -l))") || FAILED+=(brew)
+    else
+        note "brew: nothing to do"
+    fi
+fi
+
+# ---------- firmware (fwupd) ----------
+if have fwupdmgr && [ "$WSL" = 0 ]; then
+    head_ firmware
+    fwupdmgr refresh --force >/dev/null 2>&1 || true
+    if fwupdmgr get-updates >/dev/null 2>&1; then
+        fwupdmgr get-updates 2>/dev/null | grep -B1 'New version' \
+            | grep -v -- '^--' | sed -E 's/^[[:space:]│├└─]+//; s/^/  /'
+        # A BIOS flash is not a package upgrade: a big item.
+        queue_big firmware "apply the firmware update(s) above (fwupdmgr update)" y "$PRE_FW" $SUDO fwupdmgr update -y
+    else
+        note "firmware: no updates"
+    fi
+fi
+
+# ---------- Ubuntu release upgrade ----------
+# do-release-upgrade is interactive and long, so it is the one big item that
+# runs in the foreground at the end rather than unattended.
+if have do-release-upgrade; then
+    head_ release
+    prompt=$(sed -n 's/^Prompt=//p' /etc/update-manager/release-upgrades 2>/dev/null)
+    if out=$(do-release-upgrade -c 2>/dev/null); then
+        echo "$out" | sed 's/^/  /'
+        echo "${YLW}release upgrade available${RST}"
+        queue_big "release upgrade" "upgrade to the new Ubuntu release now (do-release-upgrade, interactive)" yes "$PRE_REL" $SUDO do-release-upgrade
+    else
+        note "release: $(lsb_release -ds 2>/dev/null) is current (Prompt=${prompt:-?})"
+    fi
+fi
+
+# ---------- Fedora release upgrade ----------
+if have rpm && grep -q '^ID=fedora' /etc/os-release 2>/dev/null; then
+    head_ release
+    cur=$(rpm -E %fedora 2>/dev/null)
+    newest=
+    if have curl && [[ "$cur" =~ ^[0-9]+$ ]]; then
+        for v in $((cur + 1)) $((cur + 2)); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 \
+                "https://dl.fedoraproject.org/pub/fedora/linux/releases/$v/Everything/x86_64/os/repodata/repomd.xml" 2>/dev/null)
+            [ "$code" = 200 ] && newest=$v
+        done
+    fi
+    if [ -n "$newest" ]; then
+        echo "  Fedora $cur installed; Fedora $newest is released"
+        echo "${YLW}release upgrade available${RST}"
+        if [ "$WSL" = 1 ]; then
+            # WSL never boots into dnf's offline-update target, so the offline
+            # transaction would download and never run. The online distro-sync
+            # is the route that works here; it needs a WSL restart afterwards.
+            queue_big "release upgrade" "upgrade to Fedora $newest now (online distro-sync, then 'wsl.exe --shutdown' from Windows)" yes "$PRE_REL" \
+                $SUDO dnf -y --releasever="$newest" --refresh distro-sync
+        else
+            echo "  run: sudo dnf offline-distrosync download --releasever=$newest && sudo dnf offline reboot"
+            SKIPPED+=("release upgrade (manual)")
+        fi
+    elif [ -n "$cur" ]; then
+        note "release: Fedora $cur is current"
+    fi
+fi
+
+# ---------- deferred big items ----------
+outstanding() {   # OUT = how many questions still have no answer; CUR = the first
+    OUT=0; CUR=
+    for i in "${!Q_LABEL[@]}"; do
+        if [ "${Q_STATE[$i]}" = ask ] && [ ! -f "$WORK/a/$i" ]; then
+            OUT=$((OUT + 1)); [ -n "$CUR" ] || CUR=$i
+        fi
+    done
+}
+if [ ${#Q_LABEL[@]} -gt 0 ]; then
+    : >"$WORK/done"
+    head_ deferred
+    outstanding
+    if [ "$OUT" -gt 0 ]; then
+        # Everything ordinary is finished. The question(s) may have scrolled
+        # past long ago, so restate them, repeat the asker's live prompt (it is
+        # still reading), and give a bounded wait before moving on without them.
+        limit=${UPDATEALL_ASK_TIMEOUT:-120}
+        echo "${DIM}ordinary updates are done; waiting up to ${limit}s for $OUT answer(s):${RST}"
+        for i in "${!Q_LABEL[@]}"; do
+            [ "${Q_STATE[$i]}" = ask ] && [ ! -f "$WORK/a/$i" ] && echo "  ${YLW}?${RST} ${Q_LABEL[$i]}"
+        done
+        printf "  type '%s' to approve, 'n' to skip, Enter to decide later: " "${Q_WORD[$CUR]}"
+        t=0
+        while [ "$t" -lt "$limit" ]; do
+            outstanding; [ "$OUT" = 0 ] && break
+            sleep 1; t=$((t + 1))
+        done
+        [ "$OUT" -gt 0 ] && echo   # leave the abandoned prompt line
+    fi
+    [ -n "$ASKER_PID" ] && { kill "$ASKER_PID" 2>/dev/null; wait "$ASKER_PID" 2>/dev/null; ASKER_PID=; }
+    for i in "${!Q_LABEL[@]}"; do
+        state=${Q_STATE[$i]}
+        if [ "$state" = ask ]; then
+            if [ -f "$WORK/a/$i" ]; then
+                case "$(cat "$WORK/a/$i")" in yes) state=pre ;; no) state=declined ;; *) state=later ;; esac
+            else
+                state=unanswered
+            fi
+        fi
+        case "$state" in
+            pre)
+                echo "${GRN}approved:${RST} ${Q_LABEL[$i]}"
+                if eval "${Q_CMD[$i]}"; then UPDATED+=("${Q_TAG[$i]}")
+                else FAILED+=("${Q_TAG[$i]}"); fi ;;
+            declined)   echo "${DIM}skipped:${RST} ${Q_LABEL[$i]}"; SKIPPED+=("${Q_TAG[$i]}") ;;
+            later)      echo "${YLW}later:${RST} ${Q_LABEL[$i]}"; PENDING+=("${Q_LABEL[$i]}") ;;
+            unanswered) echo "${YLW}left unanswered:${RST} ${Q_LABEL[$i]}"; PENDING+=("${Q_LABEL[$i]}") ;;
+            held)       echo "${YLW}held:${RST} ${Q_LABEL[$i]}"; PENDING+=("${Q_LABEL[$i]}") ;;
+        esac
+    done
+fi
+
+# ---------- summary ----------
+printf '\n%s== summary ==%s\n' "$BOLD" "$RST"
+label=updated; [ "$DRY" = 1 ] && label="would update"
+[ ${#UPDATED[@]} -gt 0 ] && echo "${GRN}${label}:${RST} ${UPDATED[*]}"
+[ ${#SKIPPED[@]} -gt 0 ] && echo "${YLW}skipped:${RST} ${SKIPPED[*]}"
+[ ${#FAILED[@]}  -gt 0 ] && echo "${RED}failed:${RST}  ${FAILED[*]}"
+if [ ${#PENDING[@]} -gt 0 ]; then
+    echo "${YLW}still pending (big items, not applied):${RST}"
+    printf '  %s\n' "${PENDING[@]}"
+    echo "${DIM}run updateall again to be asked, or pre-approve with -a/-f/-m/-r${RST}"
+fi
+[ ${#UPDATED[@]} -eq 0 ] && [ ${#FAILED[@]} -eq 0 ] && echo "everything is up to date"
+
+# Restart hints: Debian's flag file, or Fedora's needs-restarting (rc 1 means
+# a restart is wanted; anything else, including a plain error, is not one).
+if [ -f /var/run/reboot-required ]; then
+    echo "${YLW}reboot required${RST} ($(tr '\n' ' ' < /var/run/reboot-required.pkgs 2>/dev/null))"
+elif have dnf; then
+    dnf -C -q needs-restarting >/dev/null 2>&1; rc=$?
+    if [ "$rc" -eq 1 ]; then
+        if [ "$WSL" = 1 ]; then
+            echo "${YLW}restart recommended${RST} — run 'wsl.exe --shutdown' from Windows, then reopen this distro"
+        else
+            echo "${YLW}reboot required${RST}"
+        fi
+    fi
+fi
+[ ${#FAILED[@]} -eq 0 ]

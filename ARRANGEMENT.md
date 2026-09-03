@@ -86,6 +86,8 @@ tools/            symlinked into ~/.local/bin by agentsync
                   otherwise over ssh to the owner host
   wmachine        enrol a whole machine from the owner host
   wfleet          which machines are converged, and sync them
+  updateall       update every package manager present (apt/dnf/snap/flatpak/
+                  npm/pipx/brew/fwupd); asks about big items, never blocks on them
 ```
 
 The older `agentsync`, `wfleet`, and `wmachine` names are compatibility aliases,
