@@ -1,18 +1,20 @@
 ---
 name: lan-machine-access
-description: Use a computer explicitly configured in the local SSH config, including the ThinkPad T430, for tasks that require direct LAN access. Use when the user names a known LAN machine or when a requested machine-to-machine task can materially benefit from an already configured direct connection; do not scan the network or invent access on unconfigured machines.
+description: Use a computer explicitly configured in the local SSH config, including the ThinkPad T430 and the ThinkCentre M725s, for tasks that require direct LAN access. Use when the user names a known LAN machine or when a requested machine-to-machine task can materially benefit from an already configured direct connection; do not scan the network or invent access on unconfigured machines.
 ---
-
 # LAN Machine Access
 
 Treat `~/.ssh/config` as the machine-local registry. Credentials stay in the SSH
 agent/key files; never put passwords, tokens, private keys, or LAN addresses in
 this skill or another tracked file.
 
-## Known local alias
+## Known local aliases
 
 - `t430` — ThinkPad T430 running Linux Mint; also matches the user's phrases
   "ThinkPad", "T430", and hostname `lenovo-t430-mint`.
+- `thinkcentre` — Lenovo ThinkCentre M725s running Ubuntu 24.04; also matches
+  "ThinkCentre", "M725s", and hostname `ubuntu-ThinkCentre-M725s`. Unlike the
+  T430 it also has a tailnet alias, `thinkcentre-ts`, for use off the LAN.
 
 This alias is a name, not proof that the current computer has access. Before
 using it, run:
