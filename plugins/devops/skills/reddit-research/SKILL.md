@@ -69,6 +69,17 @@ up to two threads per query, and saves each page. Expect a five-query sweep to
 take **fifteen to twenty-five minutes**. Say so up front, then do other work
 while it runs — the gaps are working time, not waiting.
 
+The sweep talks to the tunnel through the sibling `firefox-control` wrapper, which
+runs `tunnel_cmd.py` inside the `browser` wsecret scope. Set `TUNNEL_CMD` only to
+point it somewhere else. If it exits at once with "could not open a research tab",
+run `firefox-control open https://www.google.com/` by hand: a `401 unauthorized`
+means the command is running outside the scope, not that no tab is armed.
+
+Two things seen in practice (2026-09-03): `firefox-control tabs` can print
+"unrouted: no extension has registered named tabs" while `armed` and `open` work,
+so trust `armed`. And a Google page containing `sorry/index` links is a challenge —
+stop searching from that tab and close it, even if the page still rendered.
+
 ## Open your own tabs
 
 Browser Tunnel 0.3.1 added `open`, which creates a NEW tab and arms it:

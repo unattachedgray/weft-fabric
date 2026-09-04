@@ -4,7 +4,12 @@
 set -u
 OUT="${1:?usage: sweep OUTDIR query...}"; shift
 mkdir -p "$OUT"; : > "$OUT/log.txt"
-TC="${TUNNEL_CMD:-python3 /home/julian/dev/weft/scripts/weft/tunnel_cmd.py}"
+# Default to the sibling firefox-control wrapper: it runs tunnel_cmd.py inside the
+# `browser` wsecret scope. The bare tunnel_cmd.py has no token and answers
+# `enqueue failed: 401 {"error": "unauthorized"}`, which surfaced here as
+# "could not open a research tab" (measured 2026-09-03). TUNNEL_CMD still overrides.
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TC="${TUNNEL_CMD:-$HERE/../../firefox-control/scripts/firefox-control}"
 TAB="${SWEEP_TAB:-research}"
 say() { echo "[$(date +%H:%M:%S)] $*" >> "$OUT/log.txt"; }
 pause() { s=$(( ( RANDOM % $2 ) + $1 )); say "   pause ${s}s"; sleep "$s"; }
