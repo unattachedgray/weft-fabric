@@ -224,6 +224,29 @@ def arm_hook(dry: bool) -> None:
 
 # ---------------------------------------------------------------- linking
 
+def prune_repo_links(directory: Path, wanted: set[str], cli_name: str, dry: bool) -> None:
+    """Remove symlinks in a skills directory that point into this repo but are
+    no longer eligible for this CLI, or dangle. Only repo-owned links are
+    touched: a link the owner made to somewhere else is not ours to judge."""
+    if not directory.is_dir():
+        return
+    for installed in sorted(directory.iterdir()):
+        if not installed.is_symlink() or installed.name in wanted:
+            continue
+        raw = Path(os.readlink(installed))
+        absolute = raw if raw.is_absolute() else installed.parent / raw
+        try:
+            absolute.resolve().relative_to(REPO.resolve())
+        except ValueError:
+            continue
+        why = "dangling" if not absolute.exists() else f"no longer eligible for {cli_name}"
+        if dry:
+            changed.append(f"WOULD unlink {tilde(installed)} ({why})")
+            continue
+        installed.unlink()
+        changed.append(f"unlinked {tilde(installed)} ({why})")
+
+
 def link(target: Path, at: Path, dry: bool) -> None:
     """Point `at` at `target` as a symlink. Idempotent."""
     if at.is_symlink():
@@ -360,9 +383,12 @@ def sync_cli(cli: dict, dry: bool, quiet: bool) -> bool:
         migrate_repo_links(sk, dry)
         for src in sorted(p for p in PORTABLE.iterdir() if p.is_dir()):
             link(src, sk / src.name, dry)
+        wanted_skills = {src.name for src in PORTABLE.iterdir() if src.is_dir()}
         if cli.get("plugin_skills"):
             for src in linkable_plugin_skills(cli):
                 link(src, sk / src.name, dry)
+                wanted_skills.add(src.name)
+        prune_repo_links(sk, wanted_skills, name, dry)
 
     for adapter in cli.get("post", []):
         cmd = adapter["check"] if dry else adapter["apply"]

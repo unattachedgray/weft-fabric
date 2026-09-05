@@ -1,8 +1,9 @@
 ---
 name: skill-detectors
 description: When SKILL_SIGNAL or SKILL_SIGNAL_CANDIDATE markers appear in additionalContext (emitted by this plugin's SessionStart and UserPromptSubmit hooks), you MUST follow the marker interpretation rules below. Also use when the user introduces a new third-party tool, GitHub project, or library you should evaluate for the detector framework. Do not ignore these markers — they are how this plugin surfaces context-conditional skills the user would otherwise forget to invoke.
+clis: claude
+clis-why: "The markers this skill interprets are emitted by this plugin's hooks, and only Claude Code runs plugin hooks. As a plain skill in Codex, Gemini, Cursor or dsh it can never fire, and Cursor listed it twice (2026-09-04)."
 ---
-
 # skill-detectors
 
 A framework for the *forgetting problem*: the user has installed something clever — a knowledge-graph builder, a precise text-measurement library, a structural code search tool — and still forgets to invoke it every single time, because the default habit (grep, DOM measurement, eyeballing it) fires faster than the memory of the better tool. Skill descriptions in a registry are passive. Memory rules are passive. Both lose to muscle memory.

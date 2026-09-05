@@ -87,7 +87,28 @@ class ManifestTests(unittest.TestCase):
         self.assertIn("ste", linked)
         self.assertNotIn("skill-detectors", linked)
         codex = {"name": "codex", "plugin_skills": True}
-        self.assertIn("skill-detectors", {p.name for p in self.agentsync.linkable_plugin_skills(codex)})
+        self.assertIn("sudo-run", {p.name for p in self.agentsync.linkable_plugin_skills(codex)})
+
+    def test_prune_removes_only_repo_links_that_lost_eligibility(self):
+        a = self.agentsync
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            keep = d / "sudo-run"; keep.symlink_to(ROOT / "plugins/devops/skills/sudo-run")
+            gone = d / "skill-detectors"; gone.symlink_to(ROOT / "plugins/skill-detectors/skills/skill-detectors")
+            dangling = d / "old-skill"; dangling.symlink_to(ROOT / "plugins/nope/skills/old-skill")
+            foreign = d / "mine"; foreign.symlink_to(Path(tmp))
+            a.changed.clear()
+            a.prune_repo_links(d, {"sudo-run"}, "codex", dry=False)
+            self.assertTrue(keep.is_symlink())
+            self.assertFalse(gone.exists() or gone.is_symlink())
+            self.assertFalse(dangling.is_symlink())
+            self.assertTrue(foreign.is_symlink())
+            self.assertEqual(len(a.changed), 2)
+        a.changed.clear()
+
+    def test_skill_detectors_is_claude_only(self):
+        for cli in ("codex", "gemini", "dsh", "cursor"):
+            self.assertNotIn("skill-detectors", {p.name for p in self.agentsync.plugin_skills_for(cli)})
 
     def test_market_reconcile_keeps_hooks_and_drops_copies(self):
         a = self.agentsync
