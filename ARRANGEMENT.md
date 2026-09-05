@@ -150,9 +150,16 @@ done
 ```
 
 **Link every skill under its canonical name. Aliases are not free.** Weft
-Fabric now discovers eligible plugin skills on every convergence run for Codex,
-Gemini, and dsh; Claude receives plugins through its marketplace. Adding a skill
-does not require hand-linking it on any machine.
+Fabric discovers eligible plugin skills on every convergence run for every CLI
+with a skills directory, Claude Code included (since 2026-09-04; before that
+Claude was left to its marketplace, and the marketplace hands out *copies*
+pinned to a commit — exactly the stale-copy failure above). Adding a skill does
+not require hand-linking it on any machine. The one exception is a plugin that
+ships `hooks/`: Claude Code runs hooks only for an installed plugin, so those
+(today: `skill-detectors`) are installed from the marketplace, and their skills
+are *not* symlinked for Claude, or they would appear twice. The reconciler
+enforces both halves: it installs hook plugins and uninstalls marketplace
+copies of everything else.
 
 Cursor's discovery surface is the **union of all three directories** — it reads
 `~/.cursor/skills-cursor` *and* `~/.claude/skills` *and* `~/.codex/skills`
@@ -337,9 +344,9 @@ git commit && git push
 
 - A **new plugin** also needs `plugins/<plugin>/.claude-plugin/plugin.json` and a
   row in `.claude-plugin/marketplace.json`.
-- Claude Code reaches it through the registered marketplace (local path, so repo
-  edits are live with no push cycle). Codex/Gemini need a symlink:
-  `ln -s /home/julian/dev/weft-fabric/plugins/<plugin>/skills/<name> ~/.codex/skills/<name>`
+- Every CLI, Claude Code included, gets the symlink on its next convergence run
+  (`wagent sync --local`, or the hourly timer). Nothing is hand-linked. A skill
+  meant for some CLIs only says so with a `clis:` line in its frontmatter.
 - Anything under `principles/skills/` is deployed to **all** CLIs by
   `bash scripts/deploy-principles.sh`.
 
@@ -374,8 +381,12 @@ Do not "clean up" these without understanding them:
   `": "`. Claude Code loaded it anyway; dsh's stricter `yaml@2.9.0` rejected the
   file and dropped the skill, and nothing said so. A frontmatter check that never
   parses YAML cannot see what the strict loaders see.
-- **The marketplace is registered against the local path**, not the GitHub
-  remote. That is deliberate: edits are live without a push cycle.
+- **The marketplace is registered against the GitHub remote** by the
+  reconciler (`unattachedgray/weft-fabric`), and an installed plugin is a copy
+  pinned to a commit under `~/.claude/plugins/cache`. An earlier note here
+  claimed a local-path registration with live edits; measured 2026-09-04 on two
+  machines, that was not the case. This is why skills reach Claude Code by
+  symlink and only hook-bearing plugins are installed from the marketplace.
 - **The remote holds history this clone once lost.** The local clone was
   disconnected with a flattened one-commit history; it was grafted back on top
   of `origin/main`. **Never `push --force`** here.

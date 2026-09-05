@@ -118,6 +118,24 @@ def plugin_skills_for(cli_name: str) -> list[Path]:
     return skills
 
 
+def hook_plugins() -> set[str]:
+    """Plugins that ship hooks. Hooks only run when Claude Code installs the
+    plugin from the marketplace, so these are the one case where a marketplace
+    copy is the delivery path rather than a symlink."""
+    return {p.name for p in STYLES.iterdir() if p.is_dir() and (p / "hooks").is_dir()}
+
+
+def linkable_plugin_skills(cli: dict) -> list[Path]:
+    """Plugin skills to symlink for this CLI. A CLI with a marketplace gets
+    hook plugins from the marketplace instead, so their skills are not linked
+    twice under two names."""
+    skills = plugin_skills_for(cli["name"])
+    if not cli.get("marketplace"):
+        return skills
+    hooked = hook_plugins()
+    return [s for s in skills if s.parents[1].name not in hooked]
+
+
 def migrate_repo_links(directory: Path, dry: bool) -> None:
     """Retarget links through the temporary old checkout alias to canonical paths."""
     if not directory.is_dir():
@@ -343,7 +361,7 @@ def sync_cli(cli: dict, dry: bool, quiet: bool) -> bool:
         for src in sorted(p for p in PORTABLE.iterdir() if p.is_dir()):
             link(src, sk / src.name, dry)
         if cli.get("plugin_skills"):
-            for src in plugin_skills_for(name):
+            for src in linkable_plugin_skills(cli):
                 link(src, sk / src.name, dry)
 
     for adapter in cli.get("post", []):
@@ -476,22 +494,70 @@ def sync_tools(dry: bool, quiet: bool) -> None:
         link(tool, at, dry)
 
 
+MARKET = "unatt"
+INSTALLED_PLUGINS = Path.home() / ".claude" / "plugins" / "installed_plugins.json"
+
+
+def installed_market_plugins() -> set[str]:
+    """Plugin names Claude Code currently holds as copies from the unatt marketplace."""
+    try:
+        data = json.loads(INSTALLED_PLUGINS.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return set()
+    names = set()
+    for key in (data.get("plugins") or {}):
+        if key.endswith(f"@{MARKET}"):
+            names.add(key[: -len(MARKET) - 1])
+    return names
+
+
 def refresh_marketplace(dry: bool, quiet: bool) -> None:
     if not shutil.which("claude"):
         return
     if dry:
-        notes.append("would refresh the unatt marketplace")
-        return
-    listed = run(["claude", "plugin", "marketplace", "list"])
-    if "unatt" in (listed.stdout + listed.stderr):
-        run(["claude", "plugin", "marketplace", "update", "unatt"])
-        say("  marketplace unatt refreshed", quiet)
+        notes.append(f"would refresh the {MARKET} marketplace")
     else:
-        r = run(["claude", "plugin", "marketplace", "add", "unattachedgray/weft-fabric"])
-        if r.returncode == 0:
-            changed.append("registered the unatt marketplace")
+        listed = run(["claude", "plugin", "marketplace", "list"])
+        if MARKET in (listed.stdout + listed.stderr):
+            run(["claude", "plugin", "marketplace", "update", MARKET])
+            say(f"  marketplace {MARKET} refreshed", quiet)
         else:
-            notes.append("could not register the marketplace")
+            r = run(["claude", "plugin", "marketplace", "add", "unattachedgray/weft-fabric"])
+            if r.returncode == 0:
+                changed.append(f"registered the {MARKET} marketplace")
+            else:
+                notes.append("could not register the marketplace")
+                return
+    reconcile_market_plugins(dry)
+
+
+def reconcile_market_plugins(dry: bool) -> None:
+    """Skills reach Claude Code by symlink, never as marketplace copies (a copy
+    is pinned to a commit and goes stale). The one exception is a plugin that
+    ships hooks, which Claude Code only runs when installed as a plugin. So:
+    hook plugins installed, everything else from this marketplace uninstalled."""
+    wanted = hook_plugins()
+    have = installed_market_plugins()
+    for name in sorted(wanted - have):
+        if dry:
+            changed.append(f"WOULD install plugin {name}@{MARKET} (ships hooks)")
+            continue
+        r = run(["claude", "plugin", "install", f"{name}@{MARKET}", "--scope", "user"])
+        if r.returncode == 0:
+            changed.append(f"installed plugin {name}@{MARKET} (ships hooks)")
+        else:
+            problems.append(f"could not install plugin {name}@{MARKET}: {(r.stderr or r.stdout).strip()[:120]}")
+    for name in sorted(have - wanted):
+        if not (STYLES / name).is_dir():
+            continue  # not one of ours to judge
+        if dry:
+            changed.append(f"WOULD uninstall plugin {name}@{MARKET} (its skills are symlinked)")
+            continue
+        r = run(["claude", "plugin", "uninstall", f"{name}@{MARKET}"])
+        if r.returncode == 0:
+            changed.append(f"uninstalled plugin {name}@{MARKET} (its skills are symlinked)")
+        else:
+            problems.append(f"could not uninstall plugin {name}@{MARKET}: {(r.stderr or r.stdout).strip()[:120]}")
 
 
 # ---------------------------------------------------------------- timer

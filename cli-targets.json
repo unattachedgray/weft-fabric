@@ -2,7 +2,7 @@
   "_comment": [
     "Where each agent CLI expects its global instruction file and its skills.",
     "agentsync reads this; nothing else hardcodes CLI paths. Adding support for a",
-    "new CLI is an entry here plus a commit — every machine picks it up on its",
+    "new CLI is an entry here plus a commit \u2014 every machine picks it up on its",
     "next sync with no local edits.",
     "",
     "detect:  ANY command exiting 0 means the CLI is present on this machine.",
@@ -27,7 +27,8 @@
       "machine_local": true,
       "skills_dir": "$HOME/.claude/skills",
       "output_styles_dir": "$HOME/.claude/output-styles",
-      "marketplace": true
+      "marketplace": true,
+      "plugin_skills": true
     },
     {
       "name": "codex",

@@ -72,6 +72,37 @@ class ManifestTests(unittest.TestCase):
         self.assertIn("ste", claude)
         self.assertNotIn("ste", codex)
 
+    def test_claude_gets_plugin_skills_by_symlink_like_every_other_cli(self):
+        raw = json.loads((ROOT / "cli-targets.json").read_text())
+        claude = next(c for c in self.agentsync.validate_manifest(raw) if c["name"] == "claude")
+        self.assertTrue(claude.get("plugin_skills"))
+        self.assertTrue(claude.get("marketplace"))
+
+    def test_hook_plugins_ride_the_marketplace_not_the_symlinks(self):
+        hooked = self.agentsync.hook_plugins()
+        self.assertIn("skill-detectors", hooked)
+        claude = {"name": "claude", "plugin_skills": True, "marketplace": True}
+        linked = {p.name for p in self.agentsync.linkable_plugin_skills(claude)}
+        self.assertIn("sudo-run", linked)
+        self.assertIn("ste", linked)
+        self.assertNotIn("skill-detectors", linked)
+        codex = {"name": "codex", "plugin_skills": True}
+        self.assertIn("skill-detectors", {p.name for p in self.agentsync.linkable_plugin_skills(codex)})
+
+    def test_market_reconcile_keeps_hooks_and_drops_copies(self):
+        a = self.agentsync
+        a.changed.clear(); a.problems.clear()
+        with mock.patch.object(a, "installed_market_plugins", return_value={"devops", "skill-detectors", "not-ours"}):
+            a.reconcile_market_plugins(dry=True)
+        self.assertIn("WOULD uninstall plugin devops@unatt (its skills are symlinked)", a.changed)
+        self.assertFalse(any("skill-detectors" in c for c in a.changed))
+        self.assertFalse(any("not-ours" in c for c in a.changed))
+        a.changed.clear()
+        with mock.patch.object(a, "installed_market_plugins", return_value=set()):
+            a.reconcile_market_plugins(dry=True)
+        self.assertIn("WOULD install plugin skill-detectors@unatt (ships hooks)", a.changed)
+        a.changed.clear()
+
 
 class ProtocolTests(unittest.TestCase):
     def test_check_json_is_live_and_machine_readable(self):

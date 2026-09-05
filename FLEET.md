@@ -44,7 +44,7 @@ later, optional step. A machine is fully useful without one.
 ```
 principles/AGENTS.md          shared operating principles — byte-identical everywhere
 principles/skills/<name>/     portable skills for every CLI
-plugins/<name>/               Claude Code marketplace plugins (commit-SHA versioned)
+plugins/<name>/               plugin skills, symlinked into every CLI; also the unatt marketplace
 cursor/*.mdc                  Cursor project rules (it has no global file — see below)
 cli-targets.json              every CLI's paths, as DATA
 tools/                        wsecret, wtask, wmachine, wfleet, updateall
@@ -119,7 +119,10 @@ Each run, in order:
    file, link every eligible portable/plugin skill, run structured adapters.
 5. **refresh github ssh trust** if opted in.
 6. **link `tools/` into `~/.local/bin`**.
-7. **refresh the marketplace** if `claude` is present.
+7. **reconcile the marketplace** if `claude` is present: refresh the `unatt`
+   index, install plugins that ship `hooks/` (only they need to be plugins),
+   uninstall marketplace copies of every other fabric plugin — their skills
+   are already symlinked, and a copy pinned to a commit goes stale.
 
 Exit 0 = converged (with or without changes). Exit 1 = a step failed. In
 `--check` mode, exit 2 means repairable drift was found. JSON protocol version
