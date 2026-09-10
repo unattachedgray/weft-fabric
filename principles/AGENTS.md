@@ -1,5 +1,17 @@
 # Agent Operating Principles
 
+## Shared AI routing policy
+
+**Preserve Astra first, Claude Code second for development.** Simple maintenance
+and routine tool work use deterministic code or economy CLIs/APIs through the
+shared apicascade gateway; never inherit the developer's premium model default.
+When adding or resuming a project's AI integration, declare project, job,
+execution and strength; keep maintenance escalation off. Follow Weft's
+`docs/ai-routing-policy.md` (location in machine-local notes). Do not revive
+or bulk-migrate dormant projects just to apply this policy. Profile measurements
+remain observational until validated against actual task outcomes; do not
+auto-promote models or split work from unvalidated scores.
+
 ## Iterate Independently
 
 **Build a self-serve loop; don't use the user as a test runner.**
