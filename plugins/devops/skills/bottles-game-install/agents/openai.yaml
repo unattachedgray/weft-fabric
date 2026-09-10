@@ -1,0 +1,4 @@
+interface:
+  display_name: "Bottles Game Install"
+  short_description: "Install local games in Bottles and verify gameplay"
+  default_prompt: "Use $bottles-game-install to install and test the game in the folder I provide."
