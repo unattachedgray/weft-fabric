@@ -1,0 +1,16 @@
+{
+  "name": "clone-website-scripts",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Deterministic hands and eyes for the clone-website skill: extract, spec, snapshot, compare, check.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "jpeg-js": "^0.4.4",
+    "pixelmatch": "^7.1.0",
+    "playwright": "^1.63.0",
+    "pngjs": "^7.0.0"
+  }
+}

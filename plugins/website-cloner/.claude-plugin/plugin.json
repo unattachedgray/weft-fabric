@@ -1,0 +1,8 @@
+{
+  "name": "website-cloner",
+  "description": "Clone a live web page into an editable codebase with measured fidelity: Playwright scripts extract computed styles, authored CSS, assets, motion and interaction evidence; specs are generated per section; the model builds; pixelmatch and structural gates prove the result. Runs headless by default, or through the user's armed Firefox tab (Browser Tunnel) for logged-in pages. Skill: clone-website. Agents: extractor, builder, comparator.",
+  "author": {
+    "name": "unattachedgray",
+    "url": "https://github.com/unattachedgray"
+  }
+}
