@@ -6,8 +6,8 @@ clis-why: "THE capability no CLI or model has natively — a live, authenticated
 ---
 # Firefox Control
 
-Control only the Firefox tab the user explicitly armed with the Browser Tunnel toolbar
-button (or Alt+Shift+T). This is the same local relay Codex uses (`~/.codex/skills/firefox-control`)
+Control explicitly armed tabs or research tabs the extension creates under the
+owner-authorized persistent automatic-research grant. This is the same local relay Codex uses (`~/.codex/skills/firefox-control`)
 — adapted here so Claude Code can drive it too.
 
 ## Workflow
@@ -15,7 +15,7 @@ button (or Alt+Shift+T). This is the same local relay Codex uses (`~/.codex/skil
 1. Check that `~/.hermes/tunnel/enabled` exists. Do not create it unless the user has
    authorized browser control.
 2. Confirm `looking_glass.py` is running locally on `127.0.0.1:8770`
-   (`ps aux | grep looking_glass.py`; it lives at `~/dev/weft/scripts/weft/looking_glass.py`
+   (check the loopback status endpoint; it lives at `~/dev/weft/scripts/weft/looking_glass.py`
    and is normally supervised by pm2) and that `wsecret list` reports
    `BROWSER_TUNNEL_TOKEN` in the `browser` scope.
 3. Run commands through `scripts/firefox-control`; it injects only the `browser`
@@ -49,7 +49,8 @@ button (or Alt+Shift+T). This is the same local relay Codex uses (`~/.codex/skil
    only describe the one profile that answered. Use it to find a tab for the user to
    arm; use `armed` to find a tab to command.
 
-   If nothing is armed, tell them once which tab to click.
+   For research, no pre-armed tab is needed: use `open` through the persistent
+   research grant. Do not ask the owner to arm a carrier first.
 5. Then `snapshot`. Read its header block before the payload — it names the tab that
    answered. **A screenshot is only returned when the armed tab is the visible one.**
    `chrome.tabs.captureVisibleTab` can only photograph the foreground tab, so when the
@@ -62,19 +63,22 @@ button (or Alt+Shift+T). This is the same local relay Codex uses (`~/.codex/skil
    or `navigate` only within the user's request.
 7. `open URL` creates and arms a new background tab. It can arrive through an armed
    carrier tab, or bootstrap through a Firefox profile where the owner enabled “Allow
-   research tabs” for the current browser session. The bootstrap capability permits
+   research tabs” until revoked. The bootstrap capability permits
    HTTPS `open` only; every page action still requires the newly created armed tab.
-   Use `--focus` only when the task genuinely needs the rendered screenshot.
+   Do not use `--focus` during autonomous research or tests.
 8. Close tabs created for the task with `--tab NAME close` when they are no longer needed.
    Do not close the tab the owner originally armed unless they explicitly asked for it.
 9. Verify fixes in the real rendered page after rebuilding/reloading the extension or app.
 
-If no tab is armed, do not ask the user to become the iteration loop — tell them once to
-click the Browser Tunnel toolbar button on the tab you need, or arm it yourself only if
-they've asked you to. For pages that do not require the user's live authenticated session,
-launch a throwaway Playwright/Firefox instance instead. Reserve the armed-tab path for
-authenticated state (like a logged-in facebook.com session) that cannot be reproduced safely
-another way.
+The owner authorized automatic Reddit research setup on 2026-09-10. All such
+browser access still passes through this extension and relay. Use `open` to
+create task-owned tabs; do not substitute a separate browser automation channel.
+Browser Tunnel 0.3.5 shows a notice on the controlled page (host, tab ID, action,
+and Stop access), with toolbar/popup indicators for restricted browser pages.
+This browser notice replaces per-command CLI announcements and per-use approval.
+Report setup failures in the CLI. Persistent grant revocation and the disabled
+host-side tunnel remain authoritative; never silently override them.
+Existing unrelated tabs still require the owner's explicit targeting/arming.
 
 ## Commands
 
@@ -134,3 +138,19 @@ script, over hijacking the armed tab's navigation.
 
 The relay queues one command at a time and times out (~60s) when no tab is armed. Never
 bypass the armed-tab gate or expose `BROWSER_TUNNEL_TOKEN` in output.
+
+## Preserve browser focus
+
+Owner instruction (2026-09-10): never bring browser windows/tabs to the foreground
+for autonomous research or testing. Open background tabs; use DOM snapshots and
+background assertions. Do not use `--focus` or activate a tab merely to obtain a
+screenshot. Foreground visual verification requires an explicit owner request.
+Do not switch tabs, restart the browser, or use keyboard shortcuts that steal
+focus during tests. If a restricted page needs foreground interaction, stop that
+path and report the limitation.
+
+Browser Tunnel 0.3.6 adds a green idle / amber armed toolbar icon and a badge
+counting armed tabs in the profile, visible without switching the current tab.
+The popup and tooltip identify the tabs. The relay and extension force `open`
+to remain in the background. Use this indicator, not foreground tests or desktop
+notifications, to make tunnel access visible.

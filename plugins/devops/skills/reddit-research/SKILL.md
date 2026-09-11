@@ -22,20 +22,36 @@ quietly broken, the correction in the comments that the author conceded.
 So there are exactly two viable paths, and one of them needs credentials that do
 not exist yet. Do not waste a round discovering this again.
 
+## Automatic setup and visible access
+
+All browser access goes through Browser Tunnel and its extension; do not replace
+it with another browser-control channel. Open and arm only task-owned research
+tabs. Browser Tunnel 0.3.5 displays an on-page “Active on this tab” notice with the
+host, tab ID and current action, plus a stop-access button. The toolbar badge and
+popup identify armed tabs on pages where Firefox prohibits an overlay.
+
+The browser notice is the primary notification; do not request per-use approval
+or require a CLI announcement for every tunnel command. Give a concise CLI status
+if the browser cannot show the notice, setup fails, or the task will take a while.
+Persistent research access survives Firefox restarts. Honor explicit revocation
+or a disabled tunnel; do not silently turn either back on. If setup is unavailable,
+report the actual missing component rather than repeatedly asking to arm a tab.
+Never post, vote, comment, or control unrelated tabs under this research permission.
+
 ## Which path to use
 
 **1. Browser Tunnel (works today, no Reddit API setup).** Read through `firefox-control`.
 Handles logged-in-only content and anything Reddit gates. Costs: HTML parsing,
 lazy-loaded comments, and Reddit's CSP blocks `eval` — use `snapshot` and parse
 the DOM, never `eval`. An already armed tab can carry the first `open`, or the
-owner can enable “Allow research tabs” once for the current Firefox session so
-the sweep bootstraps and arms its own disposable tabs. Inside tabs it created,
+owner-authorized persistent “Allow automatic research tabs” setting lets
+the sweep bootstrap and arm its own disposable tabs. Inside tabs it created,
 the skill may run searches, navigate results, inspect rendered post bodies and
 comments, and follow relevant comment continuation links without another click.
 
 **2. The OAuth API (better, needs a one-time app).** The token endpoint answers,
 so a script-type app at reddit.com/prefs/apps plus `REDDIT_CLIENT_ID` /
-`REDDIT_CLIENT_SECRET` in `~/.env` would give complete comment trees as JSON
+`REDDIT_CLIENT_SECRET` registered through `secret-registration` would give complete comment trees as JSON
 with no scraping. **Anonymous MCP servers will not work here** — they hit the
 same 403 endpoints. Only credentialed ones can.
 
@@ -95,9 +111,10 @@ name gets one tab and then fails on the next. `open` returns the tab id in its
 result — keep it and use it. Names are for a person choosing a tab; ids are for
 a script that made one.
 
-This does **not** remove the human gate. The command can arrive through a tab the
-owner already armed or through the session-scoped research-tab grant, and
-`~/.hermes/tunnel/enabled` must still be set. The grant permits opening an HTTPS
+The owner authorized automatic research-tab setup on 2026-09-10. Do not ask for
+a tab to be armed before each task. Use the persistent research-tab grant, or
+an already armed carrier, to open a new tab through the extension.
+`~/.hermes/tunnel/enabled` must still be set. The research grant permits opening an HTTPS
 tab only; subsequent actions require that new tab to be armed. Prefer `open`
 over `navigate` so the owner's own tab is never taken away from them.
 
@@ -162,3 +179,19 @@ rather than letting a linked file stand in for it. Both failures happened here.
   an autonomous research surface.
 - Never send the owner's credentials or session anywhere.
 - If a page 403s or challenges, stop the sweep. Do not retry harder.
+
+## Preserve browser focus
+
+Owner instruction (2026-09-10): never bring browser windows/tabs to the foreground
+for autonomous research or testing. Open background tabs; use DOM snapshots and
+background assertions. Do not use `--focus` or activate a tab merely to obtain a
+screenshot. Foreground visual verification requires an explicit owner request.
+Do not switch tabs, restart the browser, or use keyboard shortcuts that steal
+focus during tests. If a restricted page needs foreground interaction, stop that
+path and report the limitation.
+
+Browser Tunnel 0.3.6 adds a green idle / amber armed toolbar icon and a badge
+counting armed tabs in the profile, visible without switching the current tab.
+The popup and tooltip identify the tabs. The relay and extension force `open`
+to remain in the background. Use this indicator, not foreground tests or desktop
+notifications, to make tunnel access visible.
