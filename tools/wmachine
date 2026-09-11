@@ -5,7 +5,7 @@ Runs on the OWNER HOST (the box holding wtoken and the vault mint). Everything
 it does on the target is idempotent, so a partial run is repaired by running it
 again rather than needing a transaction: convergence, not installation.
 
-  wmachine enroll <ssh-host> [--name NAME] [--no-vault] [--days N]
+  wmachine enroll <ssh-host> [--name NAME] [--no-vault] [--no-secrets] [--days N]
   wmachine check  <ssh-host>
 
 Steps, each verified by reading the result back off the target:
@@ -15,7 +15,8 @@ Steps, each verified by reading the result back off the target:
      MACHINE.md stub; arms the commit hook
   4  install the hourly agentsync timer
   5  wtoken install — scoped vault token + rotation coverage   (skip: --no-vault)
-  6  read back what actually landed
+  6  wsecret provision — portable (llm-scope) credentials      (skip: --no-secrets)
+  7  read back what actually landed
 
 The target needs NO prior setup beyond sshd and your key. It does not need the
 weft repo, the w* tools, or any credential in advance.
@@ -35,6 +36,7 @@ REPO_URL = "https://github.com/unattachedgray/weft-fabric"
 REPO_DIR = "~/dev/weft-fabric"
 HOST_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 WTOKEN = Path.home() / "dev" / "weft" / "scripts" / "weft" / "wtoken"
+WSECRET = Path(__file__).resolve().parent / "wsecret"
 FLEET = Path.home() / ".config" / "agents" / "fleet.json"
 JOURNALS = Path.home() / ".config" / "agents" / "enrollments"
 
@@ -129,6 +131,7 @@ if [ -z "$t" ] || [ "$t" = inactive ]; then
 fi
 echo "timer=${t:-none}"
 echo "vault=$([ -f ~/.config/weft/vault-token ] && echo yes || echo NO)"
+echo "credentials=$(python3 -c "import json,pathlib;p=pathlib.Path.home()/'.config/weft/secrets/manifest.json';print(len(json.loads(p.read_text())) if p.exists() else 0)" 2>/dev/null || echo 0)"
 if [ -x "$repo/scripts/agentsync" ] && "$repo/scripts/agentsync" --help 2>&1 | grep -q -- '--check'; then
   report=$("$repo/scripts/agentsync" --check --json); rc=$?
   [ "$rc" -eq 0 ] || [ "$rc" -eq 2 ] || exit "$rc"
@@ -161,7 +164,7 @@ exit 0
     return 0
 
 
-def cmd_enroll(host: str, name: str | None, vault: bool, days: int) -> int:
+def cmd_enroll(host: str, name: str | None, vault: bool, secrets: bool, days: int) -> int:
     if not check_host(host):
         return 2
     name = name or f"{host}-wvault"
@@ -271,13 +274,37 @@ git -C {REPO_DIR} rev-parse --short HEAD
     else:
         step(5, "vault enrollment skipped (--no-vault)")
 
-    step(6, "read back what actually landed")
+    if secrets:
+        step(6, "portable credentials (llm scope; protected names are never bulk-copied)")
+        if not WSECRET.is_file():
+            report(WARN, f"wsecret not found at {WSECRET} — run this from the owner host to copy credentials")
+            record_enrollment(name, host, "secrets", "warning", "wsecret missing")
+        else:
+            r = subprocess.run([sys.executable, str(WSECRET), "provision", host, "--all"],
+                               capture_output=True, text=True, timeout=300)
+            for line in (r.stdout or "").strip().splitlines():
+                if line.strip():
+                    report(OK if r.returncode == 0 else WARN, line)
+            if r.returncode == 0:
+                record_enrollment(name, host, "secrets", "complete")
+            else:
+                # A machine with nothing to copy is still a correctly enrolled machine,
+                # so this warns rather than aborting an otherwise good enrollment.
+                detail = (r.stderr or "provisioning failed").strip().splitlines()[-1][:200] if (r.stderr or "").strip() else "provisioning failed"
+                report(WARN, detail)
+                record_enrollment(name, host, "secrets", "warning", detail)
+    else:
+        step(6, "portable credentials skipped (--no-secrets)")
+        record_enrollment(name, host, "secrets", "skipped")
+
+    step(7, "read back what actually landed")
     rc = cmd_check(host)
     if rc == 0:
         register_machine(name, host, vault)
         record_enrollment(name, host, "verified", "complete")
         report(OK, "added to fleet inventory")
-        report("note", f"general credentials were not copied; optionally run `wagent secrets provision {host}`")
+        report("note", f"protected credentials are never bulk-copied; add one by name with "
+                       f"`wagent secrets provision {host} --keys NAME`")
     return rc
 
 
@@ -410,6 +437,7 @@ def main() -> int:
     e.add_argument("host")
     e.add_argument("--name", help="vault token name (default <host>-wvault)")
     e.add_argument("--no-vault", action="store_true", help="skip minting a vault token")
+    e.add_argument("--no-secrets", action="store_true", help="skip copying portable credentials")
     e.add_argument("--days", type=int, default=30, help="token TTL in days")
     c = sub.add_parser("check", help="report a machine's state, change nothing")
     c.add_argument("host")
@@ -422,7 +450,7 @@ def main() -> int:
         return cmd_discover(a.enroll, a.days)
     if a.action == "check":
         return cmd_check(a.host)
-    return cmd_enroll(a.host, a.name, not a.no_vault, a.days)
+    return cmd_enroll(a.host, a.name, not a.no_vault, not a.no_secrets, a.days)
 
 
 if __name__ == "__main__":

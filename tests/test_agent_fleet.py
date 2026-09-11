@@ -216,12 +216,31 @@ class SecretProvisioningTests(unittest.TestCase):
             self.assertEqual(secret_file.stat().st_mode & 0o777, 0o600)
             self.assertEqual(secret_file.read_text(), "OPENAI_API_KEY=super-secret-value\n")
 
-            conflict = subprocess.run(
+            # Re-provisioning an identical value converges silently: enrollment is
+            # re-runnable, so this path is exercised on every repeat `wmachine enroll`.
+            repeat = subprocess.run(
                 ["python3", "-c", self.wsecret.REMOTE_PROVISIONER], input=json.dumps(payload),
+                env=env, capture_output=True, text=True, timeout=30,
+            )
+            self.assertEqual(repeat.returncode, 0, repeat.stderr)
+            repeat_report = json.loads(repeat.stdout)
+            self.assertTrue(repeat_report["ok"])
+            self.assertEqual(repeat_report["unchanged"], ["OPENAI_API_KEY"])
+            self.assertNotIn("super-secret-value", repeat.stdout + repeat.stderr)
+            self.assertEqual(secret_file.read_text(), "OPENAI_API_KEY=super-secret-value\n")
+
+            # A DIFFERENT value for a name the target already holds is still refused:
+            # silent overwrite is the failure mode worth keeping a guard against.
+            changed = dict(payload, credentials={
+                "OPENAI_API_KEY": {"scope": "llm", "value": "a-different-value"},
+            })
+            conflict = subprocess.run(
+                ["python3", "-c", self.wsecret.REMOTE_PROVISIONER], input=json.dumps(changed),
                 env=env, capture_output=True, text=True, timeout=30,
             )
             self.assertEqual(conflict.returncode, 3)
             self.assertEqual(json.loads(conflict.stdout)["conflicts"], ["OPENAI_API_KEY"])
+            self.assertEqual(secret_file.read_text(), "OPENAI_API_KEY=super-secret-value\n")
 
     def test_transport_keeps_values_out_of_ssh_arguments(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -282,7 +301,7 @@ class FleetRegistryTests(unittest.TestCase):
 
     def test_machine_name_cannot_escape_journal_directory(self):
         with mock.patch.object(self.wmachine, "check_host", return_value=True):
-            self.assertEqual(self.wmachine.cmd_enroll("safe-host", "../../escape", False, 30), 2)
+            self.assertEqual(self.wmachine.cmd_enroll("safe-host", "../../escape", False, False, 30), 2)
 
 
 
