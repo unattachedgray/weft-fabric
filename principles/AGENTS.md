@@ -177,7 +177,10 @@ commands stay out of this file — they live in each machine's local notes.
   research on Reddit → the `reddit-research` skill, which reads through an armed
   tab. Reddit 403s every direct route (curl, `.json`, old.reddit, text proxies)
   and the web-search tool cannot crawl reddit.com, so a web search is never a
-  substitute. If no tab is armed, say so and ask for one; do not quietly fall
+  substitute. Use the Browser Tunnel extension’s authorized automatic research tabs and visible
+  per-tab notice; no pre-armed carrier is required. Honor revocation, report setup
+  failures. Keep research/testing tabs in the background; never steal browser
+  focus for a screenshot without an explicit owner request. Do not quietly fall
   back to HN or blog posts and call it Reddit.
 - **"weft"** = the agentic harness at `~/dev/weft`; its own docs are `~/dev/weft/CLAUDE.md`.
 - **"dsh"** = DeepSeek Harness at `~/dev/deepseek-harness`; web UI on `127.0.0.1:3080`.
