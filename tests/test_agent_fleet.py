@@ -305,5 +305,119 @@ class FleetRegistryTests(unittest.TestCase):
 
 
 
+class MarketplaceGuardTests(unittest.TestCase):
+    """The hourly sync must never spawn `claude` while its access token is
+    expired (that wipes the login) and must not spawn it at all when there is
+    nothing to refresh."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.agentsync = load_script("agentsync_market_under_test", ROOT / "scripts" / "agentsync")
+
+    def setUp(self):
+        self.agentsync.notes.clear()
+        self.agentsync.changed.clear()
+        self.agentsync.problems.clear()
+
+    def _creds(self, root: Path, expires_ms):
+        path = root / ".credentials.json"
+        path.write_text(json.dumps({"claudeAiOauth": {"accessToken": "x", "refreshToken": "y", "expiresAt": expires_ms}}))
+        return path
+
+    def test_expired_token_is_detected_and_valid_token_is_not(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            now = 1_800_000_000_000
+            self.assertTrue(self.agentsync.claude_token_expired(self._creds(root, now - 1), now_ms=now))
+            self.assertTrue(self.agentsync.claude_token_expired(self._creds(root, now), now_ms=now))
+            self.assertFalse(self.agentsync.claude_token_expired(self._creds(root, now + 3_600_000), now_ms=now))
+
+    def test_missing_or_malformed_credentials_are_not_treated_as_expired(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.assertFalse(self.agentsync.claude_token_expired(root / "absent.json", now_ms=1))
+            (root / "junk.json").write_text("{not json")
+            self.assertFalse(self.agentsync.claude_token_expired(root / "junk.json", now_ms=1))
+            (root / "empty.json").write_text("{}")
+            self.assertFalse(self.agentsync.claude_token_expired(root / "empty.json", now_ms=1))
+            (root / "list.json").write_text("[]")
+            self.assertFalse(self.agentsync.claude_token_expired(root / "list.json", now_ms=1))
+
+    def test_market_registered_reads_claude_registry_without_spawning(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.assertFalse(self.agentsync.market_registered(root / "absent.json"))
+            reg = root / "known_marketplaces.json"
+            reg.write_text(json.dumps({"claude-plugins-official": {}}))
+            self.assertFalse(self.agentsync.market_registered(reg))
+            reg.write_text(json.dumps({"claude-plugins-official": {}, "unatt": {"source": {}}}))
+            self.assertTrue(self.agentsync.market_registered(reg))
+
+    def test_refresh_never_spawns_claude_while_token_expired(self):
+        a = self.agentsync
+        with mock.patch.object(a.shutil, "which", return_value="/usr/bin/claude"), \
+             mock.patch.object(a, "market_registered", return_value=False), \
+             mock.patch.object(a, "repo_fingerprint", return_value="abc"), \
+             mock.patch.object(a, "hook_plugins", return_value={"skill-detectors"}), \
+             mock.patch.object(a, "installed_market_plugins", return_value=set()), \
+             mock.patch.object(a, "claude_token_expired", return_value=True), \
+             mock.patch.object(a, "run") as run:
+            a.refresh_marketplace(False, True)
+            run.assert_not_called()
+        self.assertTrue(any("deferred" in n for n in a.notes), a.notes)
+        self.assertEqual(a.changed, [])
+
+    def test_refresh_spawns_nothing_when_repo_unmoved_and_plugins_settled(self):
+        a = self.agentsync
+        with mock.patch.object(a.shutil, "which", return_value="/usr/bin/claude"), \
+             mock.patch.object(a, "market_registered", return_value=True), \
+             mock.patch.object(a, "repo_fingerprint", return_value="abc"), \
+             mock.patch.object(a, "market_stamp", return_value="abc"), \
+             mock.patch.object(a, "hook_plugins", return_value={"skill-detectors"}), \
+             mock.patch.object(a, "installed_market_plugins", return_value={"skill-detectors"}), \
+             mock.patch.object(a, "claude_token_expired", return_value=False), \
+             mock.patch.object(a, "run") as run:
+            a.refresh_marketplace(False, True)
+            run.assert_not_called()
+        self.assertEqual(a.notes, [])
+
+    def test_refresh_runs_once_per_repo_move_and_stamps_it(self):
+        a = self.agentsync
+        with tempfile.TemporaryDirectory() as tmp:
+            stamp = Path(tmp) / "state" / "marketplace-refreshed"
+            ok = subprocess.CompletedProcess(["claude"], 0, "", "")
+            with mock.patch.object(a, "MARKET_STAMP", stamp), \
+                 mock.patch.object(a.shutil, "which", return_value="/usr/bin/claude"), \
+                 mock.patch.object(a, "market_registered", return_value=True), \
+                 mock.patch.object(a, "repo_fingerprint", return_value="def"), \
+                 mock.patch.object(a, "hook_plugins", return_value=set()), \
+                 mock.patch.object(a, "installed_market_plugins", return_value=set()), \
+                 mock.patch.object(a, "claude_token_expired", return_value=False), \
+                 mock.patch.object(a, "run", return_value=ok) as run:
+                a.refresh_marketplace(False, True)
+                run.assert_called_once_with(["claude", "plugin", "marketplace", "update", "unatt"])
+                self.assertEqual(stamp.read_text().strip(), "def")
+                run.reset_mock()
+                a.refresh_marketplace(False, True)   # same HEAD: nothing to do
+                run.assert_not_called()
+
+    def test_failed_refresh_leaves_no_stamp(self):
+        a = self.agentsync
+        with tempfile.TemporaryDirectory() as tmp:
+            stamp = Path(tmp) / "marketplace-refreshed"
+            bad = subprocess.CompletedProcess(["claude"], 1, "", "boom")
+            with mock.patch.object(a, "MARKET_STAMP", stamp), \
+                 mock.patch.object(a.shutil, "which", return_value="/usr/bin/claude"), \
+                 mock.patch.object(a, "market_registered", return_value=True), \
+                 mock.patch.object(a, "repo_fingerprint", return_value="def"), \
+                 mock.patch.object(a, "hook_plugins", return_value=set()), \
+                 mock.patch.object(a, "installed_market_plugins", return_value=set()), \
+                 mock.patch.object(a, "claude_token_expired", return_value=False), \
+                 mock.patch.object(a, "run", return_value=bad):
+                a.refresh_marketplace(False, True)
+            self.assertFalse(stamp.exists())
+            self.assertTrue(any("could not refresh" in n for n in a.notes), a.notes)
+
+
 if __name__ == "__main__":
     unittest.main()
