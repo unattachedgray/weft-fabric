@@ -81,9 +81,9 @@ it because this file tells them to — they have no import mechanism.
 
 ## Shared Tasks at Session Start
 
-At the start of each new session, run `python3 ~/dev/weft/scripts/weft/wtask
-brief` once. This is the common cross-project task list: every CLI may add
-freely with `wtask add`. Items marked `easy_win` may be completed autonomously
+At the start of each new session, run `wtask brief` once (on PATH on every
+enrolled machine; it reaches the owner host by itself). This is the common
+cross-project task list: every CLI may add freely with `wtask add`. Items marked `easy_win` may be completed autonomously
 when they are relevant, bounded, reversible, locally verifiable, and do not
 need new authority; verify them, mark them done with a completion note, and
 report the result to the user. Items marked `recommend` are proposals: surface

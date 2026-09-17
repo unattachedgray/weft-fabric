@@ -2,7 +2,6 @@
 name: research-first
 description: Use before executing a serious or novel task — check the knowledge wiki for prior research first, then research multi-source (GitHub/Reddit/official docs) and bank the distilled findings, labeled.
 ---
-
 # Research-First
 
 Before executing a **serious or novel** task (a real feature, an architecture decision, adopting a
@@ -12,7 +11,9 @@ the next one cheaper.
 **Where it lives:** the one LLM wiki at `~/.hermes/weftbase/default/wiki/*.md` (plain markdown,
 `kind: wiki` + `tags:` frontmatter). Claude Code reads/writes it **directly** (filesystem) — label
 research notes with the **`research`** tag so they're discernable from personal notes (that label is
-what lets both live in one wiki). Check existing research with
+what lets both live in one wiki). **That directory exists only on the owner host.** On any other
+machine check with `wrecall --brief '<topic>'` and bank with `wnote <slug>` — both are on PATH
+everywhere and reach the owner host by themselves. Check existing research with
 `grep -rli '<topic>' ~/.hermes/weftbase/default/wiki/` (or the grounded-RAG `/api/wiki/ask`).
 
 ## 1. Check the wiki FIRST

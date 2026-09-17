@@ -15,8 +15,10 @@ owner-authorized persistent automatic-research grant. This is the same local rel
 1. Check that `~/.hermes/tunnel/enabled` exists. Do not create it unless the user has
    authorized browser control.
 2. Confirm `looking_glass.py` is running locally on `127.0.0.1:8770`
-   (check the loopback status endpoint; it lives at `~/dev/weft/scripts/weft/looking_glass.py`
-   and is normally supervised by pm2) and that `wsecret list` reports
+   (check the loopback status endpoint; the relay code is `$WEFT_ROOT/scripts/weft/looking_glass.py` —
+   `~/dev/weft` on the owner host, a copy under `~/.local/lib/weft` on a leaf — supervised by pm2 on
+   the owner host and by `browser-tunnel-relay.service` (systemd --user) on a leaf; `Connection
+   refused` means nothing is supervising it, not that the token is wrong) and that `wsecret list` reports
    `BROWSER_TUNNEL_TOKEN` in the `browser` scope.
 3. Run commands through `scripts/firefox-control`; it injects only the `browser`
    scope into `tunnel_cmd.py` without printing the token.

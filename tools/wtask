@@ -1,17 +1,26 @@
 #!/usr/bin/env python3
-"""wtask — the shared cross-CLI task list, reachable from any machine.
+"""wtask / wnote / wrecall — owner-host weft tools, reachable from any machine.
 
-The real implementation lives in the weft repo and is backed by a file on the
-OWNER HOST (~/.local/share/weft/tasks.json), not by the vault. So a machine
-without the weft repo cannot read the list locally — but it can reach it over
-the SSH trust that already exists.
+The real implementations live in the weft repo and are backed by state on the
+OWNER HOST: wtask by a file (~/.local/share/weft/tasks.json), wnote and wrecall
+by the vault API on its loopback. So a machine without the weft repo cannot run
+them locally — but it can reach them over the SSH trust that already exists.
 
 This shim resolves that automatically:
-  * weft repo present locally  -> exec the real wtask
+  * weft repo present locally  -> exec the real tool
   * otherwise                  -> run it on the owner host over SSH
 
-That makes the shared core's "run wtask brief at session start" rule work
-everywhere instead of only on the owner host.
+ONE FILE, THREE NAMES. `wnote` and `wrecall` are symlinks to this file and it
+dispatches on the name it was invoked as, so the remote-quoting logic exists
+once. Measured 2026-09-17 on a leaf: skills told agents to run
+`bash ~/dev/weft/scripts/weft/wrecall`, a path only the owner host has, and a
+session's research could not be banked at all. Stdin passes through ssh, so
+`… | wnote <slug>` works from a leaf. Leaf writes are an owner decision
+(2026-09-17): the SSH trust already exceeds the leaf's read-only vault token.
+
+That makes the shared core's "run wtask brief at session start" rule, and the
+recall/bank steps of session-recall and research-first, work everywhere
+instead of only on the owner host.
 
 Owner host resolution, first hit wins:
   $WEFT_OWNER_HOST  ->  ~/.config/agents/owner-host  ->  "venge"
@@ -26,8 +35,10 @@ import shutil
 import subprocess
 import sys
 
-LOCAL = Path.home() / "dev" / "weft" / "scripts" / "weft" / "wtask"
-REMOTE = "~/dev/weft/scripts/weft/wtask"
+TOOLS = ("wtask", "wnote", "wrecall")
+NAME = Path(sys.argv[0]).name if Path(sys.argv[0]).name in TOOLS else "wtask"
+LOCAL = Path.home() / "dev" / "weft" / "scripts" / "weft" / NAME
+REMOTE = f"~/dev/weft/scripts/weft/{NAME}"
 ALIAS = re.compile(r"^[A-Za-z0-9._-]+$")
 
 
@@ -51,10 +62,10 @@ def main(argv: list[str]) -> int:
 
     host = owner_host()
     if not ALIAS.fullmatch(host):
-        print(f"wtask: refusing suspicious owner host {host!r} — must be an ssh alias", file=sys.stderr)
+        print(f"{NAME}: refusing suspicious owner host {host!r} — must be an ssh alias", file=sys.stderr)
         return 2
     if not shutil.which("ssh"):
-        print("wtask: no local weft repo and no ssh to reach the owner host", file=sys.stderr)
+        print(f"{NAME}: no local weft repo and no ssh to reach the owner host", file=sys.stderr)
         return 2
 
     # Quote each argument for the remote shell; never interpolate raw.
@@ -64,7 +75,7 @@ def main(argv: list[str]) -> int:
         ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", host, remote_cmd]
     )
     if result.returncode == 255:
-        print(f"wtask: could not reach owner host '{host}'. The shared task list lives "
+        print(f"{NAME}: could not reach owner host '{host}'. Its state lives "
               f"there; set $WEFT_OWNER_HOST or ~/.config/agents/owner-host if that is wrong.",
               file=sys.stderr)
     return result.returncode
