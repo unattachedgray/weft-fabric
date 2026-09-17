@@ -135,7 +135,14 @@ class ProtocolTests(unittest.TestCase):
         report = json.loads(run.stdout)
         self.assertEqual(report["protocol"], 1)
         self.assertIn(report["state"], ("ok", "drifted"))
-        self.assertIn("codex", report["detected_clis"])
+        # Which CLIs are installed is a fact about the machine, not the code:
+        # asserting "codex" passed on the owner host and failed on every leaf
+        # without it (measured on julgmkwork, claude only). Assert the portable
+        # contract instead — something was detected and all of it is registered.
+        known = {cli["name"] for cli in
+                 json.loads((ROOT / "cli-targets.json").read_text())["clis"]}
+        self.assertTrue(report["detected_clis"])
+        self.assertLessEqual(set(report["detected_clis"]), known)
         self.assertTrue(report["repo_fingerprint"])
         release = json.loads((ROOT / "fabric-release.json").read_text())
         self.assertEqual(report["fabric_version"], release["version"])

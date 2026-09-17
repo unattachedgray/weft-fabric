@@ -84,6 +84,8 @@ tools/            symlinked into ~/.local/bin by agentsync
   wsecret         scoped secret registrar (stdlib-only, portable)
   wtask           shared task list; runs locally if the weft repo is here,
                   otherwise over ssh to the owner host
+  wnote, wrecall  symlinks to wtask (it dispatches on its invoked name): bank
+                  to / recall from the vault wiki with the same local-else-ssh rule
   wmachine        enrol a whole machine from the owner host
   wfleet          which machines are converged, and sync them
   updateall       update every package manager present (apt/dnf/snap/flatpak/

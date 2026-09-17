@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-WEFT_ROOT="${WEFT_ROOT:-/home/julian/dev/weft}"
+# The owner host has the weft repo; a leaf has a copy of the two relay files.
+# A non-login shell (systemd, cron, another CLI) does not source ~/.bashrc.d, so
+# do not rely on WEFT_ROOT being exported — find the code.
+if [ -z "${WEFT_ROOT:-}" ]; then
+  for WEFT_ROOT in "$HOME/dev/weft" "$HOME/.local/lib/weft"; do
+    [ -f "$WEFT_ROOT/scripts/weft/tunnel_cmd.py" ] && break
+  done
+fi
+[ -f "$WEFT_ROOT/scripts/weft/tunnel_cmd.py" ] || { echo "firefox-control: tunnel_cmd.py not found under ~/dev/weft or ~/.local/lib/weft (set WEFT_ROOT)" >&2; exit 2; }
 
 exec "$HOME/.local/bin/wsecret" run browser -- python3 "$WEFT_ROOT/scripts/weft/tunnel_cmd.py" "$@"

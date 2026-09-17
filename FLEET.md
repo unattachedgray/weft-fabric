@@ -237,6 +237,7 @@ Symlinked into `~/.local/bin` by `agentsync`.
 | `wagent` | any machine | the public Weft Fabric interface: setup, status, sync, enroll, check, discover, doctor |
 | `wsecret` | any machine | scoped secret registrar; hidden prompt, mode-0600 scope files, `wsecret run <scope> -- cmd` injects one scope into one child |
 | `wtask` | any machine | shared task list. Runs locally if the weft repo is present, else tunnels to the owner host over ssh |
+| `wnote`, `wrecall` | any machine | bank to / recall from the vault wiki. Symlinks to `wtask`, which dispatches on its invoked name: same local-else-ssh rule, stdin passes through. Leaf **writes** ride the SSH trust, not the leaf's read-only vault token (owner decision, 2026-09-17) |
 | `wmachine` | **owner host** | enrol / check / discover machines |
 | `wfleet` | **owner host** | `wfleet status` — who is converged; `wfleet sync` — converge everyone |
 | `updateall` | any machine | one command to update every package manager present — apt, dnf, snap, flatpak, global npm, pipx, brew, fwupd, and a report of a newer distro release. Everything ordinary runs unattended, orphan removal and major npm bumps included. Only a firmware flash or a distro release upgrade is asked about, once, at the end, as a `[y/N]` (`y` or `yes` approve); no answer leaves it undone, and `-f` / `-r` pre-approve. Asks for the sudo password only when sudo needs one. `sudo updateall` needs a one-time `sudo ln -s ~/.local/bin/updateall /usr/local/bin/updateall` per machine, since sudo's `secure_path` excludes `~/.local/bin` |
