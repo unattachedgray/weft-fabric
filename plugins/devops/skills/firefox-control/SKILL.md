@@ -141,6 +141,30 @@ script, over hijacking the armed tab's navigation.
 The relay queues one command at a time and times out (~60s) when no tab is armed. Never
 bypass the armed-tab gate or expose `BROWSER_TUNNEL_TOKEN` in output.
 
+## Sight and network without focus (tunnel 0.3.10, 2026-09-21)
+
+`shot --save DIR` photographs the ARMED tab itself, visible or not (Firefox
+`tabs.captureTab`), so an autonomous run can look at what it did without raising a
+window. `snapshot` now carries the same image beside the DOM. `capture start
+[--match SUBSTR]` records the responses that tab receives (default match
+`/api/graphql`), `capture read --save DIR` hands them over as `resp-NNNN.json` +
+`index.json`, `capture stop` ends it. This is the JSON a page actually received —
+paginated feed data never lands in the DOM as text, so a scroll-then-snapshot
+loop cannot see it; capture can. Buffers are bounded (200 responses / 40 MB per
+tab) and dropped when the tab closes. Both are read-only observation; neither
+changes the page.
+
+## The tunnel manages its own tabs (0.3.13, owner rule 2026-09-21)
+
+`open` puts every research tab into ONE research window that the extension creates
+once, unfocused, and reuses; the tab is active there, so the page is visible and
+feeds paginate, while the owner's window is never touched and focus is returned to
+it immediately (`focusReturnedTo` in the result). A second `open` of the same URL
+reuses that tab (`reused: true`). Tabs nobody commanded for 10 minutes are closed
+by the extension; `close --all` closes everything it opened, and the window closes
+with its last tab. A script must call `close --all` when it finishes or fails.
+Never create windows or tabs yourself.
+
 ## Preserve browser focus
 
 Owner instruction (2026-09-10): never bring browser windows/tabs to the foreground
