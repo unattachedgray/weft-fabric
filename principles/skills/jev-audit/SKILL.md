@@ -12,6 +12,13 @@ Jev takes a `state` plus typed questions and returns probabilities: `noul` (yes/
 
 This skill builds on **MagicBeansAI/jev-audit** (MIT, vendored in `upstream/`): its tiering, its report template and its architecture notes. It adds what that audit lacks: gateway and CLI call detection, a traffic check, a measured A/B before cutover, and the pitfalls learned from migrations on this machine.
 
+## Two hunting grounds, audited with equal weight
+
+1. **Heavy LLM calls that are really decisions.** These are slow or quota-spending calls (seconds, subscription CLIs, frontier tiers) whose output code only branches on: a label, a yes/no, a score, a route, a verdict. Replacing them makes the software **faster and cheaper**.
+2. **Unsmart deterministic code where judgment was never affordable.** These are keyword lists, regexes, word-overlap thresholds, marker lists, hard-coded if-chains over text, "Unsorted" buckets, exact-match dedupe, and manual review queues. An LLM was never a good fit here (too slow or too costly per item, or nobody considered it), so the code settled for a crude rule. At about 0.2 s and fractions of a cent, Jev makes real judgment affordable at these points. That makes the software **smarter**, often in places that run far more often than any LLM call.
+
+The first audit of weft found the biggest wins in ground 2: bookmark categories left in "Unsorted" by keyword rules, news sections with no topic rules, research reading search results in raw order, and alert dedupe keyed on process IDs. Do not stop after the LLM inventory. Keep code that is exact (arithmetic, dates, permissions) or already measured as good.
+
 ## Before you start
 
 - **Read** `upstream/jev-reference.md`: the API, primitives and limits.
@@ -26,11 +33,16 @@ python3 <this-skill-dir>/scan.py <repo-path>          # ranked by decision cues;
 
 The scanner finds HTTP endpoints, SDKs, the local gateway (`:8090`), local model servers (`:1234`, `:11434`) and subscription CLIs (`claude -p`, `codex exec`, `gemini -p`, agy, grok). It ranks each file by label, verdict, score and route cues near the call. A high score is a lead. Only reading the code gives a verdict.
 
-Also look for **judgment the software lacks today**. These are places with no model at all, where Jev may still belong:
+Then run **ground 2**, the places with no model at all. The scanner cannot rank these, so search for them:
 - keyword or regex lists trying to capture meaning ("urgent", "refund", `re.compile(r"(cancel|quit|…)")`);
 - long if-chains over free text;
 - manual review queues and "ask the human" prompts that exist only because the code cannot judge;
-- TODOs such as "classify later" or "needs AI".
+- TODOs such as "classify later" or "needs AI";
+- word-overlap or Jaccard thresholds deciding "same story", "same idea" or "relevant";
+- "Unsorted", "other" or "misc" buckets that hold a large share of the data;
+- raw-order processing where nothing ranks relevance (search results, candidates, context snippets).
+
+Grep aids: `re.compile(`, `_WORDS =`, `_MARKERS`, `in lower`, `Jaccard`, `overlap >=`, `Unsorted`, `TODO`.
 
 ## Step 2: Read each site and tier it
 
