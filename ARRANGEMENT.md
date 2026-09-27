@@ -53,7 +53,10 @@ Remote: `github.com/unattachedgray/weft-fabric`
 ~/.codex/AGENTS.md  ~/.gemini/AGENTS.md  ~/AGENTS.md  ~/.dsh/AGENTS.md
                           └─► all symlinks to principles/AGENTS.md (one inode).
                               Claude Code is the exception: ~/.claude/CLAUDE.md
-                              is a real file that @imports it.
+                              is a real file that @imports it. Claude ≥2.1.277 also
+                              loads AGENTS.md from ancestor dirs, so its `post`
+                              adapter lists ~/AGENTS.md in claudeMdExcludes —
+                              only while that is still the shared symlink.
 
 ~/.config/agents/MACHINE.md   per-machine, NOT in this repo, NOT synced, no symlink.
                           └─► the other half of the pair: what is true on THIS box

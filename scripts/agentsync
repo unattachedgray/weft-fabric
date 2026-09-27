@@ -287,7 +287,15 @@ def ensure_imports(path: Path, imports: list[Path], dry: bool) -> None:
     lines = existing.splitlines()
     wanted = [f"@{i}" for i in imports]
     present = [ln for ln in lines if ln in wanted]
-    if present == wanted:
+    # The pre-rename checkout alias resolves to the same files, so an import
+    # through it is a leftover duplicate. Claude dedupes it by real path; drop
+    # the line anyway so the file says what is actually loaded.
+    alias = REPO.parent / "claude-skills"
+    # A checkout still named claude-skills IS the repo, not an alias of it.
+    legacy = {f"@{alias / i.relative_to(REPO)}" for i in imports
+              if alias != REPO and i.is_relative_to(REPO)}
+    stale = [ln for ln in lines if ln in legacy]
+    if present == wanted and not stale:
         return
     if dry:
         for i in imports:
@@ -295,9 +303,11 @@ def ensure_imports(path: Path, imports: list[Path], dry: bool) -> None:
                 changed.append(f"WOULD add @import {tilde(i)} to {tilde(path)}")
         if present and present != wanted:
             changed.append(f"WOULD reorder @imports in {tilde(path)} (shared core must come first)")
+        for ln in stale:
+            changed.append(f"WOULD drop legacy alias {ln} from {tilde(path)}")
         return
     path.parent.mkdir(parents=True, exist_ok=True)
-    body = [ln for ln in lines if ln not in wanted]
+    body = [ln for ln in lines if ln not in wanted and ln not in legacy]
     while body and not body[0].strip():
         body.pop(0)
     if not existing:
@@ -309,6 +319,8 @@ def ensure_imports(path: Path, imports: list[Path], dry: bool) -> None:
             changed.append(f"added @import {tilde(i)} to {tilde(path)}")
     if present and present != wanted:
         changed.append(f"reordered @imports in {tilde(path)} (shared core first, machine-local overrides it)")
+    for ln in stale:
+        changed.append(f"dropped legacy alias {ln} from {tilde(path)}")
 
 
 def tilde(p: Path) -> str:
@@ -413,7 +425,7 @@ def sync_cli(cli: dict, dry: bool, quiet: bool) -> bool:
                 if line.strip():
                     notes.append(f"{name}: {line.strip()}")
             for line in r.stdout.strip().splitlines():
-                if line.strip().startswith("linked:"):
+                if line.strip().startswith(("linked:", "changed:")):
                     changed.append(f"{name} {line.strip()}")
         else:
             problems.append(f"{name} post step failed ({cmd}): "
