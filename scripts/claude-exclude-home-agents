@@ -1,0 +1,92 @@
+#!/usr/bin/env python3
+"""Keep Claude Code from loading the shared principles twice.
+
+Claude Code imports principles/AGENTS.md from ~/.claude/CLAUDE.md. Since
+2.1.277 it ALSO loads AGENTS.md as project instructions wherever a project has
+no CLAUDE.md, walking ancestors — so every project under $HOME picked up
+~/AGENTS.md, the symlink that exists for Cursor, and paid for the same ~6k
+tokens a second time. Measured 2026-09-27 with `claude -p /context`: the import
+dedupes by real path, the ancestor load does not.
+
+`claudeMdExcludes` drops exactly that one path and leaves every project's own
+AGENTS.md loading (setting instructionFiles to "claude-md" would lose those).
+
+The exclusion is correct only while ~/AGENTS.md IS the shared file. If it ever
+becomes a real file of its own, hiding it would silently drop instructions, so
+this also removes the entry again. Converges both ways; check never writes.
+
+  scripts/claude-exclude-home-agents --check   # exit 1 when drifted
+  scripts/claude-exclude-home-agents           # apply
+"""
+from __future__ import annotations
+
+import json
+import os
+import sys
+import tempfile
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[1]
+CANON = REPO / "principles" / "AGENTS.md"
+KEY = "claudeMdExcludes"
+
+
+def main() -> int:
+    check = sys.argv[1:] == ["--check"]
+    if sys.argv[1:] not in ([], ["--check"]):
+        print("usage: claude-exclude-home-agents [--check]", file=sys.stderr)
+        return 2
+    home = Path(os.environ["HOME"])
+    target = home / "AGENTS.md"
+    settings = home / ".claude" / "settings.json"
+
+    shared = target.is_symlink() and target.resolve() == CANON.resolve()
+    try:
+        data = json.loads(settings.read_text(encoding="utf-8")) if settings.exists() else {}
+    except (OSError, json.JSONDecodeError) as exc:
+        # Never rewrite a file we could not read: that would erase the owner's settings.
+        print(f"refusing: cannot parse {settings}: {exc}", file=sys.stderr)
+        return 2
+    if not isinstance(data, dict):
+        print(f"refusing: {settings} is not a JSON object", file=sys.stderr)
+        return 2
+    excludes = data.get(KEY, [])
+    if not isinstance(excludes, list):
+        print(f"refusing: {KEY} in {settings} is not a list", file=sys.stderr)
+        return 2
+
+    present = str(target) in excludes
+    if present == shared:
+        return 0
+    if check:
+        print(f"{KEY} {'lacks' if shared else 'still hides'} {target}", file=sys.stderr)
+        return 1
+
+    if shared:
+        data[KEY] = excludes + [str(target)]
+        what = f"added {target} to {KEY}"
+    else:
+        rest = [e for e in excludes if e != str(target)]
+        if rest:
+            data[KEY] = rest
+        else:
+            data.pop(KEY, None)
+        what = f"removed {target} from {KEY} (no longer the shared file)"
+
+    settings.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=settings.parent, prefix=".settings.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+        if settings.exists():
+            os.chmod(tmp, settings.stat().st_mode & 0o7777)
+        os.replace(tmp, settings)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
+    print(f"changed: {what}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

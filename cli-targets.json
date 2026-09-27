@@ -28,7 +28,14 @@
       "skills_dir": "$HOME/.claude/skills",
       "output_styles_dir": "$HOME/.claude/output-styles",
       "marketplace": true,
-      "plugin_skills": true
+      "plugin_skills": true,
+      "post": [
+        {
+          "name": "home AGENTS.md exclusion",
+          "check": "scripts/claude-exclude-home-agents --check",
+          "apply": "scripts/claude-exclude-home-agents"
+        }
+      ]
     },
     {
       "name": "codex",

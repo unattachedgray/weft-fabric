@@ -426,5 +426,76 @@ class MarketplaceGuardTests(unittest.TestCase):
             self.assertTrue(any("could not refresh" in n for n in a.notes), a.notes)
 
 
+class HomeAgentsExclusionTests(unittest.TestCase):
+    SCRIPT = ROOT / "scripts" / "claude-exclude-home-agents"
+
+    def run_script(self, home: Path, *args: str) -> subprocess.CompletedProcess:
+        env = dict(os.environ, HOME=str(home))
+        return subprocess.run([str(self.SCRIPT), *args], env=env, capture_output=True, text=True)
+
+    def test_shared_symlink_is_excluded_once_and_other_settings_survive(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            (home / "AGENTS.md").symlink_to(ROOT / "principles" / "AGENTS.md")
+            settings = home / ".claude" / "settings.json"
+            settings.parent.mkdir()
+            settings.write_text(json.dumps({"theme": "dark", "claudeMdExcludes": ["/x/CLAUDE.md"]}))
+            self.assertEqual(self.run_script(home, "--check").returncode, 1)
+            self.assertIn("changed:", self.run_script(home).stdout)
+            self.assertEqual(self.run_script(home, "--check").returncode, 0)
+            self.assertEqual(self.run_script(home).stdout, "")   # idempotent
+            data = json.loads(settings.read_text())
+            self.assertEqual(data["theme"], "dark")
+            self.assertEqual(data["claudeMdExcludes"], ["/x/CLAUDE.md", str(home / "AGENTS.md")])
+
+    def test_own_home_agents_file_is_never_hidden(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            (home / "AGENTS.md").write_text("my own notes")
+            settings = home / ".claude" / "settings.json"
+            settings.parent.mkdir()
+            settings.write_text(json.dumps({"claudeMdExcludes": [str(home / "AGENTS.md")]}))
+            self.assertEqual(self.run_script(home, "--check").returncode, 1)
+            self.run_script(home)
+            self.assertNotIn("claudeMdExcludes", json.loads(settings.read_text()))
+
+    def test_unreadable_settings_are_refused_not_overwritten(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            (home / "AGENTS.md").symlink_to(ROOT / "principles" / "AGENTS.md")
+            settings = home / ".claude" / "settings.json"
+            settings.parent.mkdir()
+            settings.write_text("{not json")
+            self.assertEqual(self.run_script(home).returncode, 2)
+            self.assertEqual(settings.read_text(), "{not json")
+
+    def test_legacy_alias_import_is_dropped(self):
+        a = load_script("agentsync_alias_test", ROOT / "scripts" / "agentsync")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "CLAUDE.md"
+            machine = Path(tmp) / "MACHINE.md"
+            legacy = a.REPO.parent / "claude-skills" / "principles" / "AGENTS.md"
+            path.write_text(f"@{a.CANON}\n@{machine}\n\n@{legacy}\n\n# notes\n")
+            a.changed.clear()
+            a.ensure_imports(path, [a.CANON, machine], False)
+            self.assertEqual(path.read_text(), f"@{a.CANON}\n@{machine}\n\n# notes\n")
+            a.changed.clear()
+            a.ensure_imports(path, [a.CANON, machine], False)
+            self.assertEqual(a.changed, [])
+
+    def test_checkout_named_like_the_alias_still_converges(self):
+        a = load_script("agentsync_old_name_test", ROOT / "scripts" / "agentsync")
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "claude-skills"
+            canon = repo / "principles" / "AGENTS.md"
+            path = Path(tmp) / "CLAUDE.md"
+            path.write_text(f"@{canon}\n\n# notes\n")
+            with mock.patch.object(a, "REPO", repo):
+                a.changed.clear()
+                a.ensure_imports(path, [canon], False)
+            self.assertEqual(a.changed, [])
+            self.assertEqual(path.read_text(), f"@{canon}\n\n# notes\n")
+
+
 if __name__ == "__main__":
     unittest.main()
