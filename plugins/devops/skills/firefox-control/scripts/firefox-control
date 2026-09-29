@@ -1,14 +1,27 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# The owner host has the weft repo; a leaf has a copy of the two relay files.
-# A non-login shell (systemd, cron, another CLI) does not source ~/.bashrc.d, so
-# do not rely on WEFT_ROOT being exported — find the code.
+# Browser Tunnel >= 0.4: the CLI installed by browser-tunnel's install.sh talks to
+# each Firefox profile's native host over a local socket — no relay, no token.
+# It still reaches a profile on the 0.3 HTTP relay when this machine holds
+# BROWSER_TUNNEL_TOKEN, so hand it the `browser` scope when that exists.
+NATIVE="$HOME/.local/lib/browser-tunnel/tunnel_cmd.py"
+WSECRET="$HOME/.local/bin/wsecret"
+if [ -f "$NATIVE" ]; then
+  if [ -x "$WSECRET" ] && "$WSECRET" list 2>/dev/null | grep -qE '^BROWSER_TUNNEL_TOKEN[[:space:]]+browser'; then
+    exec "$WSECRET" run browser -- python3 "$NATIVE" "$@"
+  fi
+  exec python3 "$NATIVE" "$@"
+fi
+
+# Pre-0.4 machines: the owner host has the weft repo; a leaf has a copy of the
+# two relay files. A non-login shell (systemd, cron, another CLI) does not source
+# ~/.bashrc.d, so do not rely on WEFT_ROOT being exported — find the code.
 if [ -z "${WEFT_ROOT:-}" ]; then
   for WEFT_ROOT in "$HOME/dev/weft" "$HOME/.local/lib/weft"; do
     [ -f "$WEFT_ROOT/scripts/weft/tunnel_cmd.py" ] && break
   done
 fi
-[ -f "$WEFT_ROOT/scripts/weft/tunnel_cmd.py" ] || { echo "firefox-control: tunnel_cmd.py not found under ~/dev/weft or ~/.local/lib/weft (set WEFT_ROOT)" >&2; exit 2; }
+[ -f "$WEFT_ROOT/scripts/weft/tunnel_cmd.py" ] || { echo "firefox-control: Browser Tunnel CLI not installed (run ~/dev/browser-tunnel/install.sh)" >&2; exit 2; }
 
-exec "$HOME/.local/bin/wsecret" run browser -- python3 "$WEFT_ROOT/scripts/weft/tunnel_cmd.py" "$@"
+exec "$WSECRET" run browser -- python3 "$WEFT_ROOT/scripts/weft/tunnel_cmd.py" "$@"
