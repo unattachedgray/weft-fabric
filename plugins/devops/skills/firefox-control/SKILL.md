@@ -1,29 +1,34 @@
 ---
 name: firefox-control
-description: Inspect and interact with the user's explicitly armed Firefox session through Weft's local browser tunnel (looking_glass.py + the Browser Tunnel extension). Use when an agent must view an authenticated page as rendered in Firefox, open or navigate background tabs, capture DOM and screenshots, execute diagnostic JavaScript, click or type into elements, or debug a live web app or browser extension.
+description: "Inspect and interact with the user's explicitly armed Firefox session through the Browser Tunnel extension and its local native host (legacy: weft's looking_glass.py relay). Use when an agent must view an authenticated page as rendered in Firefox, open or navigate background tabs, capture DOM and screenshots, execute diagnostic JavaScript, click or type into elements, or debug a live web app or browser extension."
 clis: claude, codex, gemini, cursor, dsh
 clis-why: "THE capability no CLI or model has natively — a live, authenticated Firefox tab. Not redundant with any built-in browser tool: those drive a fresh throwaway browser with no session. Link it into every CLI."
 ---
 # Firefox Control
 
 Control explicitly armed tabs or research tabs the extension creates under the
-owner-authorized persistent automatic-research grant. This is the same local relay Codex uses (`~/.codex/skills/firefox-control`)
+owner-authorized persistent automatic-research grant. This is the same local tunnel Codex uses (`~/.codex/skills/firefox-control`)
 — adapted here so Claude Code can drive it too.
 
 ## Workflow
 
 1. Check that `~/.hermes/tunnel/enabled` exists. Do not create it unless the user has
    authorized browser control.
-2. Confirm `looking_glass.py` is running locally on `127.0.0.1:8770`
-   (check the loopback status endpoint; the relay code is `$WEFT_ROOT/scripts/weft/looking_glass.py` —
-   `~/dev/weft` on the owner host, a copy under `~/.local/lib/weft` on a leaf — supervised by pm2 on
-   the owner host and by `browser-tunnel-relay.service` (systemd --user) on a leaf; `Connection
-   refused` means nothing is supervising it, not that the token is wrong) and that `wsecret list` reports
-   `BROWSER_TUNNEL_TOKEN` in the `browser` scope.
-3. Run commands through `scripts/firefox-control`; it injects only the `browser`
-   scope into `tunnel_cmd.py` without printing the token.
-4. **Start with `armed`, not `tabs` and never `snapshot`.** `armed` reads the relay's
-   registry: every armed tab, in every Firefox profile, each with a name. It touches
+2. Confirm the transport. **Browser Tunnel >= 0.4 (native, the default):**
+   `~/dev/browser-tunnel/install.sh --check` reports the native host and CLI installed.
+   Firefox starts the host per profile; each listens on a 0600 socket in
+   `$XDG_RUNTIME_DIR/browser-tunnel/`. No relay, service or token is involved, so a
+   machine needs only the extension plus `install.sh` — nothing from another machine.
+   **0.3 profiles (legacy):** they poll `looking_glass.py` on `127.0.0.1:8770`
+   (pm2 on the owner host) with `BROWSER_TUNNEL_TOKEN` from `wsecret`'s `browser`
+   scope. The 0.4 CLI reaches both at once when that token exists, and `armed` marks
+   relay-only tabs `[relay]`.
+3. Run commands through `scripts/firefox-control`. It prefers the native CLI
+   (`~/.local/lib/browser-tunnel/tunnel_cmd.py`), injecting the `browser` scope only
+   when this machine holds the token; without the native CLI it falls back to the
+   weft relay client exactly as before.
+4. **Start with `armed`, not `tabs` and never `snapshot`.** `armed` reads every
+   profile's registry: every armed tab, in every Firefox profile, each with a name. It touches
    no tab, so it cannot act on the wrong one while you are still working out which
    one you want.
 
@@ -44,7 +49,7 @@ owner-authorized persistent automatic-research grant. This is the same local rel
    ```
 
    The bare site name (`civitai`) works when it is unique. With several armed and no
-   `--tab`, the relay refuses and lists the candidates — it will not pick one for you,
+   `--tab`, the CLI refuses and lists the candidates — it will not pick one for you,
    because acting on the wrong logged-in profile is worse than a failed command.
 
    `tabs` still lists every OPEN tab, but it has to be executed by a tab, so it can
@@ -73,7 +78,7 @@ owner-authorized persistent automatic-research grant. This is the same local rel
 9. Verify fixes in the real rendered page after rebuilding/reloading the extension or app.
 
 The owner authorized automatic Reddit research setup on 2026-09-10. All such
-browser access still passes through this extension and relay. Use `open` to
+browser access still passes through this extension and its native host (or the legacy relay). Use `open` to
 create task-owned tabs; do not substitute a separate browser automation channel.
 Browser Tunnel 0.3.5 shows a notice on the controlled page (host, tab ID, action,
 and Stop access), with toolbar/popup indicators for restricted browser pages.
@@ -113,7 +118,7 @@ which the owner sets in the extension popup. Two tabs on the same site in the
 SAME profile get a number appended. A tab id also works as a target.
 
 **Each Firefox profile is a separate client.** The extension gives every profile
-a persistent id and registers its armed tabs; the relay routes each command to
+a persistent id and registers its armed tabs; the CLI routes each command to
 one client's queue. Before this, a single global command slot went to whichever
 profile polled first — with two profiles running, commands landed at random in
 whichever browser answered, against whichever account was logged in there.
@@ -138,7 +143,7 @@ values can often be found in `<profile>/storage/default/moz-extension+++<uuid>/`
 that, or a purpose-built debug message handler in the target extension's own background
 script, over hijacking the armed tab's navigation.
 
-The relay queues one command at a time and times out (~60s) when no tab is armed. Never
+The tunnel queues one command at a time and times out (~60s) when no tab is armed. Never
 bypass the armed-tab gate or expose `BROWSER_TUNNEL_TOKEN` in output.
 
 ## Sight and network without focus (tunnel 0.3.10, 2026-09-21)
@@ -177,6 +182,6 @@ path and report the limitation.
 
 Browser Tunnel 0.3.6 adds a green idle / amber armed toolbar icon and a badge
 counting armed tabs in the profile, visible without switching the current tab.
-The popup and tooltip identify the tabs. The relay and extension force `open`
+The popup and tooltip identify the tabs. The host, legacy relay and extension force `open`
 to remain in the background. Use this indicator, not foreground tests or desktop
 notifications, to make tunnel access visible.
