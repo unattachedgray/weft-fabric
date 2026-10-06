@@ -47,7 +47,7 @@
     {
       "name": "review",
       "source": "./plugins/review",
-      "description": "Code review and security audit procedures — for CLIs without built-in review commands"
+      "description": "Code review and security audit procedures \u2014 for CLIs without built-in review commands"
     },
     {
       "name": "skill-detectors",
@@ -58,6 +58,16 @@
       "name": "skill-management",
       "source": "./plugins/skill-management",
       "description": "Discover, create, and propagate Claude Code skills: find-skills (search/install from ecosystem), skill-development (full TDD lifecycle), skill-enhance (propagate a tech across your library)."
+    },
+    {
+      "name": "universal-modder",
+      "source": "./plugins/universal-modder",
+      "description": "Game modding and repair workflows, engine recon, asset pipelines and field notes. Vendored from rehan-remade/universal-modder (MIT)."
+    },
+    {
+      "name": "reverse-tooling",
+      "source": "./plugins/reverse-tooling",
+      "description": "Complementary artifact inspection with REA and persistent, evidence-driven Ghidra analysis."
     }
   ]
 }

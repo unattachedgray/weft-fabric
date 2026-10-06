@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-06",
+  "commits": {
+    "rea": "reviewed 904d03e987a6c498561b314a266202dee84b13ab; installed skill from npm release 4.0.1",
+    "ghidra-iterative-re": "d7c146e4aab93b52e96998f5129101dfdc7f2e5f",
+    "ghidra-headless-mcp": "307b461cdbbedfbafb3771333f21875b745f940e"
+  },
+  "rea_package": {
+    "version": "4.0.1",
+    "integrity": "sha512-bAStIWN4c2O6hDpguwJZm6nhLReierRsHOglCc/FA/KIPI2/jAU2u1WeQhng6VJ0K5vhOZMLsHSDuqyTOQ3vRw=="
+  },
+  "local_changes": [
+    "Make bundled msvc_demangle executable; upstream docs invoke it directly.",
+    "Normalize imported trailing whitespace/line endings without changing content."
+  ],
+  "ghidra_backend_license": "GPL-2.0, separately installed software; not vendored"
+}

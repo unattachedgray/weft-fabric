@@ -1,0 +1,8 @@
+{
+  "name": "universal-modder",
+  "description": "Game modding and repair workflows, engine recon, asset pipelines and field notes. Vendored from rehan-remade/universal-modder (MIT).",
+  "author": {
+    "name": "unattachedgray"
+  },
+  "homepage": "https://github.com/rehan-remade/universal-modder"
+}

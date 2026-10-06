@@ -1,0 +1,11 @@
+{
+  "date": "2026-10-06",
+  "commits": {
+    "universal-modder": "76b9c7e77ead5fd2d5f1b7613c6a7ed591b01c70"
+  },
+  "local_changes": [
+    "Entry and mashup skills link local repair/port guides.",
+    "Examples and startup hooks excluded; upstream code links retained.",
+    "Normalize imported trailing whitespace/line endings without changing content."
+  ]
+}

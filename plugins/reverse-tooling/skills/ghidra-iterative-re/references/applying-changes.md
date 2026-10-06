@@ -1,0 +1,1290 @@
+# Applying changes — what to apply, and how to survive it
+
+*Reference for the `ghidra-iterative-re` skill. Only `SKILL.md` is loaded when the
+skill is invoked; this file is read on demand when its trigger fires. New lessons of
+this kind belong here, not in `SKILL.md`.*
+
+**Read this when:** you are about to mutate the program, emit a C header from recovered
+types, or decide which apply is worth the round.
+
+**In this file:**
+
+- What actually improves decompilation
+- Emit a C header, and add the assertions yourself
+- Mutation safety — the rest of the bracket
+
+## What actually improves decompilation
+
+- **Function signatures.** Parameter/return types propagate to call sites — the strongest
+  real cascade. Mangled names encode full signatures;
+  `DemanglerCmd(addr, mangled).applyTo(program, monitor)` applies name *and* signature —
+  and, with default options, **disassembles and can create a function** at the address
+  (`DemanglerOptions.doDisassembly` defaults to `true`). It is a mutating operation of the
+  same class as the ones you bracket, not a naming convenience.
+
+  **But measure the VARIANCE before you commit one, because the Parameter ID analyzer got
+  there first.** "Signatures propagate to call sites" is true and it is not a licence: a
+  committed signature's payoff is that it replaces N *different* per-site guesses with one
+  answer, so the round is worth exactly what N is — and where the Decompiler Parameter ID
+  analyzer has already run, N is often 1. Measured on one binary, on the two highest-fan-in
+  functions in it (a custom arena allocator and its free, 852 call sites): both already
+  carried an analyzer-committed `__cdecl` one-parameter prototype at
+  `SignatureSource=ANALYSIS`, structurally identical to the one the planned round proposed,
+  and decompiling all 428 callers and inspecting every CALL p-code op found **361 of 361**
+  allocator sites already rendering one argument and `int *`, and **475 of 475** free sites
+  already rendering one argument and no result. Zero variance on either axis; the round
+  evaporated on one read-only probe. Count the distinct (arity, return type) pairs across the
+  call sites first — that number *is* the payoff.
+
+  Two traps ride along with it, both measured in that round:
+  - **The more CORRECT type can be the less USEFUL one, and the summary line cannot show
+    it.** `void *` is right for an allocator and `int *` is a decompiler guess — but every
+    one of those 361 sites *consumes* the return, and `int *` renders a dereference directly
+    where `void *` forces a cast at each use. Committing the correct type would have cost
+    legibility at 361 sites for nothing measurable, while the round's own headline ("852 call
+    sites given a committed signature") would have read as success. Grade a type change by
+    what it does at the call sites that exist, not by which type is more nearly true.
+  - **An `AI` signature does NOT outrank an `ANALYSIS` one, so the cascade may take it
+    back.** Verified from the enum on a 12.1.2 install: `ANALYSIS` and `AI` are both priority
+    **2**, `isHigherPriorityThan` false in *both* directions. Laying an AI-tagged signature
+    over an analyzer-committed one is a peer overwrite that `analyzeChanges` is entitled to
+    reverse — so check `getSignatureSource()` on the target *before* planning the apply,
+    not after the cascade eats it.
+- **Defining functions at undefined code.** Feeds analyzers new material, extends
+  pointer-table runs truncated by undefined targets, adds call-graph edges. Often the
+  highest-leverage single mutation.
+- **Type vftable struct components as `Pointer` → `FunctionDefinition`, not as bare
+  pointers.** The idiomatic build — `ClassUtils.getVftDefaultEntry(dtm)` — returns a plain
+  `PointerDataType`, which names the slots but types nothing, so every virtual call still
+  decompiles as `(*(code *)(*(int *)this + 0x48))()`. Build a `FunctionDefinitionDataType`
+  from each slot TARGET's function instead and the same call renders
+  `(*p->vftable->GetPos)(p)` with typed arguments and a return type that propagates into
+  the caller's locals. Measured on one binary: 1053 of 1068 slots across 15 classes, from
+  363 distinct definitions (slots share targets through inheritance), every one
+  `__thiscall` with a real prototype. Two things make it cheap and safe: take the
+  signatures only from targets carrying a MANGLED symbol, so the evidence tier is the
+  binary's own string; and `Structure.replace(ordinal, ptr, 4, name, comment)` is a
+  1-for-1 swap, so assert the struct's length and component count are unchanged and the
+  blast radius is confined to decompilation. The slots you cannot type are usually the
+  compiler-generated destructor thunks, which have no export by construction — leave them
+  bare rather than inventing a signature.
+
+  **CORRECTION, measured 170 program versions later: the apply described above produced
+  SILENTLY WRONG C, and the reason is `this`.** Each definition was built from its target's
+  signature with `this` left out, and kept `__thiscall`. A `FunctionDefinitionDataType` has no
+  class to supply an automatic `this`, so the decompiler put the FIRST DECLARED parameter in
+  ECX — measured from call renders: the first rendered argument is the dispatch object itself
+  in 1146 of 1153 calls, e.g. `(*this->vftable->GetRender)((int)this)` for a method whose
+  mangled name takes one `int` and whose body is `RET 4`. The decompiler therefore believes
+  the callee pops four bytes fewer than it does, and **every later `[ESP+N]` read in the
+  caller is off by four**: a pushed parameter is replaced by an unrelated stack slot holding a
+  constant, the branch that tested it is folded away, and the only symptom is a generic
+  `Removing unreachable block` warning. A related failure: a slot declared `void` whose body
+  returns on the x87 stack renders its callers' use as `extraout_ST0`. **Build each definition
+  with an explicit `this` pointer as its first parameter, and before trusting any typed slot,
+  compare its declared stack cleanup against the target body's `RET n`** — a check no
+  per-function signature audit performs, because it compares a function against itself, never
+  against the prototype its call sites are typed with. The improvement in readability above was
+  real, which is exactly why nobody looked for damage.
+
+  **And the repair has its own trap: census the call sites that reach a definition by OVERRUN.**
+  When an object is typed as a base class whose vftable struct is SHORTER than the slot being
+  called, the decompiler indexes the table as an array (`vftable[1].IsTargetHit`) and borrows
+  whatever definition sits at that position — an unrelated method. Measured on the same
+  project: ~195 such call sites in 97 functions rendered the wrong method before the repair and
+  after it; making the definitions correct changed 131 of them and turned 2 from plausible to
+  catastrophic (one function lost 15 of its blocks), because the borrowed prototype had been
+  wrong by four bytes in a direction that happened to look right. The repair still paid for
+  itself many times over, but the two were foreseeable: grep the decompiled output for
+  `vftable\[\d+\]` BEFORE applying, and treat the dispatching object's type, not the definition,
+  as the defect at those sites.
+
+  **A CORRECT FLOAT RETURN ON A TYPED SLOT CAN MAKE THE C WORSE, AND THE CAUSE IS A DECOMPILER BUG
+  PRESENT IN EVERY RELEASE THROUGH 12.1.4 AND FIXED ON `master` (GP-7167, 2026-08-25).** On 32-bit x86, a virtual
+  call through a vtable struct whose `FunctionDefinition` returns `float` or `double` renders as a
+  bare statement, and the caller's use of the result appears later as `extraout_ST0`. The UNTYPED
+  call `(float10)(**(code **)...)()` had bound the result correctly, because with no declaration the
+  decompiler infers outputs from what the caller reads. Measured on one project: four DLL-implemented
+  slots returning on the x87 stack, established by two witnesses, and typed correctly, made **31
+  callers that previously produced trustworthy C worse**; left untyped, none got worse.
+  - **The cause, verified by instrumenting the 12.1.2 decompiler.** A `float`/`double` is smaller
+    than the 10-byte ST0, so `ParamEntry::getAddrBySlot` asks for a float-extension JOIN address
+    through `spaceid->getManager()` -- the manager that created the REGISTER space, which is the
+    `Translate` object, not the `Architecture`. Only the Architecture has a join space
+    (`Architecture::restoreFromSpec` inserts it after `copySpaces`), so the join record is built with
+    a null space and the address comes back INVALID. Storage assignment then falls through to the
+    next output entry: **EAX for a `float`, EDX:EAX for a `double`**, type-locked. Nothing reads those
+    after the call, the output is removed as dead, and the caller's real ST0 read is left dangling
+    as `extraout_ST0`. Direct calls to a `Function` get their storage from the Java side and never
+    take this path, which is why float returns on direct calls bind. PR #6715
+    (<https://github.com/NationalSecurityAgency/ghidra/pull/6715>, open and unreviewed since July
+    2024) diagnoses the same bug and proposes forwarding the translator's join lookups; **`master`
+    fixed it differently in GP-7167 (f17a0b5719)**, by passing the owning manager into
+    `getAddrBySlot`. A standalone datatest -- a `__thiscall` vtable call with an argument, returning
+    `float4`/`float8` -- fails 0/3 on 12.1.2 and passes 3/3 on master. A no-argument pointer call does
+    NOT reproduce it (the decompiler's output recovery rescues it), so a test of this bug needs the
+    vtable shape.
+  - **You cannot fix it by dropping a master `decompile` into a release.** The native decompiler and
+    the Java side change the pipe protocol in lockstep; master's GP-6985 added a message type that
+    12.1.x Java rejects as an alignment error. The fix is the whole Ghidra (build master, pinned to a
+    commit) or a local backport of GP-7167's `getAddrBySlot` change.
+  - **Refuted candidates, so nobody re-tests them:** the return WIDTH as the cause (`float` and
+    `double` both fail, by the mechanism above), and a missing ST0 output in the calling-convention
+    model (`x86win.cspec` gives `__thiscall` the same `ST0, EAX` output list as the other
+    conventions). A `float10` return fails too, but by a DIFFERENT path: it is turned into a hidden
+    return pointer, consistent with its padded size exceeding ST0's `maxsize="10"` in the fallback
+    assignment -- not investigated further, and not a workaround.
+  - **The rule: before KEEPING a type, measure what the decompiler does with it at the call sites,
+    not only whether it is right.** Dump the affected callers under both arms (typed and untyped,
+    restoring the program afterwards) and score both with the same rule the quality gate uses; hold
+    the type if it regresses, record the fact separately, and look for the decompiler bug. The
+    correct type should still win in the end: hold it only until the bug is fixed upstream or locally.
+  - **And audit the checks that were calibrated while the bug was live.** Measured on one project after
+    moving to a build with the fix: a prototype-audit tool's calibration arm had pinned "this float slot
+    loses its return at this caller" as ground truth, and failed on the fixed decompiler -- correctly.
+    The same tool's defect list went from 27 rows to 0, because every row was the decompiler's failure
+    on a float-DECLARED slot, filed as a defect in the slot typing. When every row of a defect list
+    shares one shape, test the TOOL for that shape before repairing the rows; and grade a calibration
+    whose positive case is a tool bug on a pinned fixture, not on the live output.
+- **Struct layouts.** Field accesses become named. Can *change* signatures as a side
+  effect: a large struct returned by value switches to the hidden return-storage-pointer
+  convention, so `T Func(this)` becomes `T * Func(this, T *__return_storage_ptr__)`.
+- **Data mutability.** *"The decompiler will display the contents of a memory location if
+  the contents are marked as constant. Otherwise it will display a pointer to the
+  location."* Settings: normal / constant / volatile / writable — per-data, or
+  per-memory-block via the Memory Map. Marking genuinely read-only sections constant is
+  factually correct, cheap, and high-leverage. Marking hardware registers **volatile**
+  stops the decompiler folding away repeated reads.
+- **"Exceeded maximum restarts with more pending" is a hard-coded cap, and better typing
+  hits it.** Read from the decompiler source (master `d6192cb`, 12.3-DEV): `coreaction.cc`
+  builds the main loop as `ActionRestartGroup(..., "universal", 1)`, allowing ONE restart, and
+  `FuncCallSpecs::forceSet` (`fspec.cc`) requests a restart whenever a function-pointer type
+  reaches an indirect call after data flow has committed. A typed virtual call whose receiver is
+  the RETURN of another typed call (`obj->GetDerived()` then `derived->Method()`) is discovered
+  only after the first restart and needs a second, so typing vtables makes the warning MORE
+  common. The C it leaves looks like a slot-definition bug (the second call is rendered without
+  its `this`) and is not one. Measured on one binary: 15 of 15 such functions cleared either by
+  persisting the decompiler's own discovered prototypes as call-site overrides
+  (`HighFunctionDBUtil.writeOverride`) or by rebuilding `decompile` with the cap at 4, and the two
+  produced byte-identical C. Prefer the rebuild if you can pin a build: an override stores a COPY
+  of the prototype, so a later slot retype silently misses every overridden call site. The cap is
+  consulted only when exceeded, so a rebuild changes EXACTLY the functions carrying the warning;
+  predict that, then check it (0 of 400 random controls changed, 15 of 5,649 over the full
+  program). **General rule: when a decompiler warning recurs, grep its text in
+  `Ghidra/Features/Decompiler/src/decompile/cpp/` before designing around it.**
+- **Measure a type change's render trade over the CALLGRAPH of what changed, not over a
+  pattern.** Before check-in, dump and score every function the change can re-render, then keep
+  it only if the quality measure does not drop. Measured on one binary: a set chosen by call
+  SPELLING (the vtable-slot renders expected at the call sites) missed a direct caller of a
+  retyped function, which lost D5 and was found only in the whole-program measurement. The
+  post-apply join then found two more spellings of the same typed call (`(member.vftable)->slot_N`
+  on an embedded object, `pVtable->slot_N` through a copied vtable pointer). Build the set from
+  the callgraph of every changed signature plus the slot targets, and treat the pattern-based set
+  as a lower bound.
+- **A census that reads UNTYPED renders must be pinned to the program version it was approved
+  against.** The census that licensed a vtable struct counted call sites whose result is read,
+  in the untyped spelling `(**(code **)(vtable + K))(...)`. After its own apply those calls render
+  typed (`vtable->slot_N(...)`), the read vanishes from its pattern, and re-run it would declare
+  a read slot `void`, i.e. it reads its own apply back. Name the approval version in the tool and
+  refuse to re-derive from a later program; a typed-spelling matcher is not a safe substitute when
+  several classes' structs render the same field names.
+
+### Emit a C header, and add the assertions yourself
+
+**Emit a C header from recovered types, and add the assertions yourself.** It is the bridge
+to a reimplementation, it is diffable outside Ghidra, and generating it forces every
+recovered layout to be complete and self-consistent rather than approximately right.
+
+Emit the *types* with the built-in: **`ghidra.program.model.data.DataTypeWriter(dtm,
+writer)`** is the public, supported ANSI-C type emitter ("The ANSI-C code should compile on
+most platforms"). Do **not** reach for `CppExporter.CPPResult` — it is a **private nested
+record**, uncallable from a script and absent from the javadoc, and `CppExporter` itself
+decompiles the entire program as a side effect (options `CREATE_C_FILE`,
+`CREATE_HEADER_FILE`, `EMIT_TYPE_DEFINITONS` — Ghidra's typo, not ours). It delegates its
+type emission to `DataTypeWriter` anyway.
+
+Then wrap that output yourself with `_Static_assert(offsetof(T, field) == K)` per field and
+a `sizeof` assertion per class, and **compile it**. No Ghidra exporter emits compile-time
+offset assertions, and the compile is the only step that recomputes offsets from the C
+object model rather than from your own arithmetic — which is precisely the step worth
+having. Hand-rolling the *type* emitter is the failure "Check for a built-in before writing
+your own" (`references/api.md`) warns about; hand-rolling the *assertions* is the whole point.
+
+**And emit FIXED-WIDTH types, not `char *` or `long`.** The target's word size is not the
+host's, and getting this wrong silently relays every field after the offender. It breaks the
+header, the recompile and the reimplementation — in that order of discovery and the reverse
+order of cost. See **Target ABI vs host ABI** in `references/oracles-and-abi.md`.
+
+### Mutation safety — the rest of the bracket
+
+- **A scalar invariant is a smoke alarm, not a change set.** Keep the function count as the
+  cheap canary, then get the real measurement: check the program in before the round, and
+  afterwards run `ProgramDiff(checkpointProgram, currentProgram).getDifferences(
+  ProgramDiffFilter(CODE_UNIT_DIFFS | SYMBOL_DIFFS | FUNCTION_DIFFS | REFERENCE_DIFFS |
+  COMMENT_DIFFS), monitor)` → an `AddressSetView`. That enumerates categories a function
+  count is *structurally* blind to — references, comments, register context, source map,
+  equates, bookmarks. **`ProgramMerge`** then restores a *specific* category from the
+  checkpoint (`mergeFunctions`, `mergeLabels`, `mergeCodeUnits`, `mergeComments`,
+  `mergeReferences`, `replaceFunctionSignatureSource`), which is the closest thing to the
+  undo that `canUndo()` refuses to give you for a previous script run's transaction.
+  Version control works in a local, non-shared project, and Program Differences can diff
+  against a version picked from the Version History table.
+- **A confirmation pass earns its cost only when something CHANGED between passes.** A post-apply
+  stability check (every read-only sweep re-run, outputs byte-compared) is run once to SURFACE
+  what moved and again to CONFIRM the fixes. The second run tests the FIXES — a repaired script,
+  a moved pinned count, a newly registered producer — so if the first run's only findings are
+  changed artifacts, and a join of every changed row against the addresses the round itself
+  wrote finds none outside it, the join IS the confirmation. A second run would compare against
+  files the first run wrote, and could only catch a sweep that is nondeterministic on identical
+  input. Measured on one project, where a pass costs ~30 minutes: a 12-row signature round found
+  exactly the two predicted artifacts, 12 rows each, 0 outside the round, having made every
+  predictable knock-on edit (pinned counts, producer registrations) BEFORE the first pass — the
+  second pass bought nothing. The rule that saves the pass is the same one that avoided a third:
+  **predict and pre-apply the knock-ons of your own apply, then run one pass.** Run the second
+  when the first raised, found an unexplained row, or needed any edit to a check.
+- **Scope address sets as narrowly as the operation allows.** Broad set + large archive
+  is the dangerous combination; the incident did not reproduce narrowly.
+- **`Function.setName(sameName, SourceType.X)` IS A NO-OP FOR THE SOURCE — and a mutation
+  that silently does nothing is indistinguishable from one that worked.** Measured: a round
+  re-tagging 22 project-applied names from `ANALYSIS` to `AI` called `setName` with each
+  function's existing name and the new tier. Ghidra short-circuits when the name is
+  unchanged, so no tier moved. All 22 calls returned cleanly, the census printed, the ledger
+  was written, and the run would have reported success. `Function` has **no source setter at
+  all**; **`Symbol.setSource(...)` is the API** — `dir()` on the live objects shows
+  `getSignatureSource`/`setSignatureSource` on `Function` and `getSource`/`setSource` on
+  `Symbol`. Two things generalise past the specific call:
+  - **Count the population you claim to have changed.** Per-item calls that do not throw are
+    not evidence; only a before/after count of the property itself is. Here
+    `ai_symbols == before + N` was the sole check capable of noticing, and the same shape
+    catches any API that silently declines.
+  - **Ask the object rather than recall the API.** One five-line probe printing the
+    SourceType-related members of `Function` and `Symbol` settled in seconds what reasoning
+    from memory had already got wrong once.
+- **A RAISED RUN LEAVES YOUR LEDGER AHEAD OF THE PROGRAM.** The ledger append precedes the
+  verification, so a failed apply claims names it did not apply — and the ledger is what your
+  provenance gates join against, so the damage lands in the guard rail rather than in an
+  artifact. Revert the raised run's rows BY NAME before re-running.
+- **BEFORE WRITING INTO A SLOT, ENUMERATE ITS READERS — AND ANSWER WITH A NUMBER, NOT A
+  COMPATIBILITY ARGUMENT.** Comments, tags and bookmarks feel inert, and they are not: measured,
+  a round adding provenance PLATE comments at every project-named address was writing into the
+  exact slot `Ghidra`'s Function ID analyzer uses, which a standing gate read and regex-parsed a
+  `Libraries:` block out of. The tempting move is to reason that a prepended block separated by
+  a blank line cannot disturb a parser looking further down — and that reasoning was *correct*,
+  which is precisely why it is not evidence. What shipped instead: a census counting the overlap
+  (**1** address of 3618), a writer that prepends and preserves rather than replaces, and a
+  before/after equality check on all **56** parses. Any slot with a reader needs the equality
+  check; grep for who reads it before deciding it is inert.
+- **RUN EVERY GATE AT THE NEW VERSION — "this round could not have touched it" is sound
+  reasoning and still an assumption.** Measured: a state line was drafted claiming five gates
+  green after a comment-only round when two had been re-run and two were inferred safe on the
+  grounds that comments cannot move types or vtables. True, and it costs two minutes to find
+  out. The most-read sentence in a project's records should carry measurements, not deductions.
+- **A PRECONDITION MEASURED BEFORE A BATCH OF OPERATIONS CAN BE INVALIDATED BY THOSE
+  OPERATIONS — re-check it immediately before the operation it guards.** Measured: an
+  applier verified at census time that no type of a given name existed; a *merge step in the
+  same run* then created one, because moving a function into a class namespace makes Ghidra
+  materialise a placeholder struct of that name; the next step died on a duplicate-name
+  exception with the round half-applied. A census is for deciding SCOPE. It is not a
+  substitute for the check at the point of use.
+- **WRITE A MULTI-STEP APPLY TO CONVERGE ON THE END STATE, NOT TO ASSUME THE START ONE.**
+  `canUndo()` is `False` for a previous script run's transaction and your snapshot-restore
+  path is probably untested, so a raise part-way through leaves a state you must be able to
+  RE-ENTER. Make every step report "already" and do nothing when its end state holds; then a
+  re-run on a finished program is a no-op that still verifies every intended fact, and
+  forward recovery becomes provable rather than hopeful. Two things make it work:
+  - **Derive the population from a REPO fact, not a PROGRAM fact.** Membership taken from an
+    append-only ledger's last row per address survived the partial apply intact; membership
+    read from "who currently occupies this namespace" would have made the round's scope
+    depend on how far the failed run got.
+  - **Give the applier a dry arm that runs the REAL code path** (`do=False` through the same
+    convergence functions). That is the arm that catches this class of defect; a selftest
+    built only from constructed inputs cannot.
+- **`replaceDataType(placeholder, keeper, True)` MOVES the keeper into the DISCARDED type's
+  category.** Measured: structs folded over demangler-created placeholders ended up under
+  `/Demangler/`, not at the root where they had been, and every consumer looking up
+  `"/" + name` silently reported them ABSENT. When you fold types, enumerate the consumers
+  of the type's PATH, not just of its name.
+- **AN INVARIANT BRACKET THAT CHECKS A *DELTA* GOES BLIND THE MOMENT A RUN RAISES.** Measured:
+  an apply died part-way, and the next run's before/after delta compared two states that were
+  *both* already wrong — the delta was clean and the program was damaged. Pin the bracket to an
+  **absolute** expected value, not to "the same as when I started". The cost is that the pin must
+  be re-set whenever you legitimately change the number, and that is the point: **a re-pin is a
+  decision with a reason attached, a range is a decision to stop noticing.** Measured again two
+  rounds later — a probe stopped on `datatypes=1396, expected 1395` after an apply that created
+  exactly one array type. The temptation is `>=` or a tolerance; the correct move is to account
+  for the delta from the apply's own record (one `created` row at that version boundary) and
+  re-pin to 1396 with the reason in the comment. A range would have silently absorbed the next
+  apply's collateral damage.
+- **AN APPLIER THAT REBUILDS FROM AN ARTIFACT WILL DISCARD EVERY REFINEMENT THAT LIVES ONLY IN
+  THE PROGRAM — AND NOTHING WILL NOTICE.** Measured: a re-run would have replaced a 268-field
+  embedded record, applied by a later round directly into the program, with the one opaque
+  `uint8_t[300]` the artifact still carried. The struct still tiles, its length is unchanged, and
+  a bracket counting functions, symbols and datatypes sees nothing — the discarded type is still
+  in the DataTypeManager, merely unreferenced. **Diff each already-final class against its own
+  plan before writing, and hold back any class the program types more specifically.** Two traps
+  inside that guard, both paid for:
+  - **Compare RESOLVED types, not names.** The first version compared `getName()` and called every
+    `dword` component richer than the plan's `uint32_t` — the same type under two names — so every
+    already-applied class came back held-back for a reason unrelated to any refinement. It was
+    right for two classes and wrong for a third: a check passing for the wrong reason.
+  - **Decide what "more specific" means, explicitly, because that predicate is load-bearing in
+    BOTH directions.** Placeholder shapes (`undefined*`, `uint8_t[N]`) must not count as richer.
+    That one line is what later let the same guard handle the *opposite* case — an artifact that
+    had grown FINER than the program — without modification: the coarse cells being replaced were
+    placeholder-shaped, so they offered no resistance, while the genuine refinement did. **The
+    guard was right for a case nobody designed it for, which is worth writing down**: the next
+    edit to that predicate silently decides whether re-applies still work.
+- **APPLYING AN OPAQUE `uint8_t[N]` OVER A REGION DOES NOT MERELY FAIL TO HELP — IT DEGRADES THE
+  EVIDENCE NEEDED TO SUBDIVIDE THAT VERY REGION.** Measured: filling a class tail with a byte
+  array made the decompiler re-render two dword stores as twelve one-byte stores, and one-byte
+  cells across the harvest went 15 → 109. The round that applied it understated its own cost,
+  because "the placeholder is neutral until we learn more" is the natural assumption and it is
+  false. Two consequences: **take widths from the INSTRUCTION, never from the decompiler's
+  varnode**, and expect any later attempt to subdivide that cell to be arguing against evidence
+  your own apply corrupted. It is reversible — subdividing the cell later restored the same
+  accesses to single dwords, with the instruction width identical throughout, which is the proof
+  of which rendering was the false one.
+- **A "NOTHING CHANGED" DETECTOR MUST COMPARE WHAT THE RUN WOULD WRITE AGAINST WHAT THE PROGRAM
+  HOLDS — NOT A PROXY LIKE SIZE.** An idempotent applier needs to distinguish a genuine re-run
+  (where before == after by construction, so a payoff delta is *unavailable* rather than *zero*)
+  from a real change. Measured: the test was "is every target already at its final length", which
+  cannot see a class at the same size whose contents the artifact has since subdivided. It would
+  have reported a real, measured payoff as *"UNAVAILABLE ... not a gain this run produced"* —
+  the same lie of form the unavailable branch exists to prevent, pointed the other way. Ask the
+  question of the classes the run actually WRITES: one it deliberately holds back says nothing
+  about whether anything changed. **When you change such a rule, print both the old verdict and
+  the new one permanently** — that is the two-step diff baked in, and it costs one line.
+
+### An applier's population rule does not follow the evidence; somebody has to move it
+
+**Measured: 137 classes had no applied struct, and the cause was one gate keyed to the wrong
+source.** The applier accepted a class only if a *naming* registry announced it. That was correct
+when written — the naming registry was the layout source. The layout evidence later came from a
+different witness entirely (constructor writes, 925 of 1046 rows), and **the gate did not follow**.
+Over the 137: size decided **137/137**, base already laid out **137/137**, namespace 54/137,
+declarer **0/137**.
+
+Nothing warned, and nothing could: **a population rule that reaches nothing looks exactly like a
+population that has nothing in it.** Both print zero and both leave the artifact empty.
+
+- **The tell is a gate whose pass rate is 0 while every other gate on the same population passes
+  ~100%.** Print every gate's pass count as a fraction of the population, always, including the
+  ones you expect to pass — a single `ALL FOUR: 0 of 137` line beside four per-gate lines locates
+  the binding constraint in one read.
+- **Ask it of every applier you own, periodically and not only when a round stalls:** is this gate
+  keyed to the evidence it applies, or to whatever source happened to exist the day it was written?
+- The reason this survives so long is that the *stalled* population is invisible from inside the
+  applier. It is only visible by joining the applier's gates against the population the evidence
+  now covers — which is a read-only query nobody runs, because the applier reports success.
+
+### Every mutating applier needs a state meaning "already exactly what I would write"
+
+**Measured: an apply raised part-way — after writing all 19 types, before the cascade — and could
+not be restarted.** Undo was unavailable (`canUndo=False`; the script provider's transaction was
+not rolled back on the exception). The applier's state machine had three states: `absent`,
+`placeholder`, `applied` — and `applied` meant *"somebody else's, refuse to touch it"*. So the 19
+types the round had just written were indistinguishable from another round's, the route flipped to
+`already_applied`, and the population guard would have raised on the disagreement. **A partial
+failure is precisely when a resume is needed, and a three-state machine cannot offer one.**
+
+The fix is a fourth state — *this is already exactly what I would write* — verified rather than
+rewritten. Note it is not a weakening: it checks the shape in full (one component, right offset,
+right field name, right type, right length) before granting it.
+
+- **A sibling script in the same repo had the missing arm from the start.** Before designing a new
+  applier's state machine, read the states of the most similar existing one; the expensive states
+  are the ones somebody already learned to need.
+- **Pin the census to the ROUTE population, not the number of writes.** A human approved "19". On
+  the resumed run 0 needed writing; pinning to writes would have demanded `apply 0` and silently
+  broken the tie to what was approved. The route population is 19 on both runs.
+- **A raised run is not a no-op run.** Check what actually landed before deciding how to recover —
+  here, querying one type settled it in one call, and the answer (not rolled back) determined the
+  whole recovery path.
+
+### Before choosing where an annotation lives, count how many of the population can carry it
+
+**Measured: the obvious home for "this class adds no data members" is the type's own description,
+and 96 of the 101 classes had no type at all.** That route would have recorded the finding for 5 of
+101 and printed a clean summary — coverage theatre with no bug in it, because every write it
+attempted would have succeeded.
+
+Pick the anchor that **all** of the population has (here the dispatch table's address, which every
+class has by construction), and state the coverage as a fraction before writing anything.
+
+### Never destroy an existing annotation; append below it, and count the three cases separately
+
+An address that already carries a comment usually carries *provenance* — which round named it, on
+what evidence. Overwriting is silent and unrecoverable. Distinguish and count: **fresh** (nothing
+there), **ours-refreshed** (drop your previous block by marker, re-add — so a re-run cannot
+accumulate copies of itself), **appended below foreign text** (kept intact). Print all three; a
+round that expected `fresh` and got `foreign_append` has learned something about the address space
+before it writes.
+
+### A naming apply creates TYPES you did not ask for
+
+**Measured.** A round that applied **no types at all** — it named 203 functions into 98 newly
+created class namespaces — moved the program's whole-datatype count by **+136** and changed a
+`signature` column in an artifact three steps downstream.
+
+The mechanism: creating a class namespace materialises a 1-byte placeholder *type* of that name,
+and the cascade then types a `__thiscall` function's `this` against it. So "this is a naming round,
+the type invariants cannot move" is false, and a round that reasons that way will be surprised by
+its own gate.
+
+Budget for it: **a naming round that creates namespaces should expect the datatype bracket to
+fire**, and should plan the by-name account for the placeholders before running, not after. The
+payoff is real and worth having — `this` typed at the class is what turns raw pointer arithmetic
+into member access — but it is a type change arriving through a name-shaped door.
+
+### When an apply's payoff disappoints, ask whether it is the wrong apply or the wrong ORDER
+
+**Measured, on the same script run twice.** A struct apply over ~100 classes retyped **7 of 40**
+functions and said so. Two rounds later the *identical* script, artifact and population rule
+retyped **107 of 140**. Nothing about the apply changed; in between, a naming round had attributed
+203 functions to those classes, and **a struct only retypes where a signature already points at
+the class type**.
+
+Both readings of the first result would have been wrong. "The apply is not worth it" would have
+discarded a 15x payoff sitting one round away. "The measurement is pessimistic" would have been
+dressing up a real number. What was right: apply anyway (the work was correct and the artifact was
+needed), **state the small number plainly**, and record what the payoff was gated on — which is what
+made the multiplier visible when it arrived.
+
+The generalisation: an apply's benefit is often a product of two applies, and the one you are
+holding may be the second factor. Before concluding a route is low-value, ask what its payoff is
+*conditional on*, and whether that precondition is cheap and already on the backlog.
+
+### Predict whether a round moves the type count, and be suspicious when the bracket disagrees
+
+Two rounds, opposite shapes, measured:
+
+| round | what it applied | datatype count |
+|---|---|---|
+| naming into new namespaces | **no types at all** | **+136** — `createClass` materialises a 1-byte placeholder per namespace, and the cascade types `__thiscall` `this` against it |
+| structs over existing placeholders | **81 structs** | **0** — `replaceDataType` swaps in place under the same name |
+
+So the intuitive rule is exactly backwards, and both surprises are cheap to avoid by predicting the
+number before the run. A bracket that fires when you expected silence — or stays silent when you
+expected a delta — means the apply did something other than what you believe, and that is worth
+stopping for rather than re-pinning past.
+
+### A derived type that is the same size as its base ties with it on every size-keyed join
+
+**Measured.** Representing "this class adds no data members" as `struct Derived { Base base; }` is
+correct and drift-free — and it necessarily creates a type of *exactly* its base's size. Do that
+100 times and every witness that identifies a type BY SIZE gains candidates: a 128-byte block-copy
+site went from two possible types to five, the three new ones being classes that had been 1-byte
+placeholders the round before.
+
+The new candidates are genuinely that size, so this is **dilution, not error** — but it is
+permanent, it is invisible unless you diff the artifact, and it is a property of the design rather
+than of any one round. Record it where the size-keyed witness is documented, and require later
+rounds that lean on such a join to state the candidate count as a fraction rather than quoting it
+as if it were narrow.
+
+## Before reverting a raised apply, establish WHICH SIDE IS AHEAD
+
+The standing repair for an apply that raised is *do not promote its output — revert the artifacts it
+touched, by name.* That rule is right, and it encodes an assumption worth making explicit: **the
+artifacts ran ahead of the program.** Which is the normal failure, because artifacts are written
+last, after the program mutation has already succeeded.
+
+There is a second shape, and the standing rule makes it worse rather than better.
+
+**Measured.** A script renamed five symbols, rewrote both its side ledgers, then raised on a mistyped
+cascade call. Program and ledgers had moved **together** and agreed with each other exactly; only the
+cascade and the post-cascade re-assert had not run. Reverting the ledgers there would have
+**manufactured** the desync the rule exists to prevent — turning a consistent, unfinished state into
+an inconsistent one.
+
+- **Diff the program against the ledger before deciding.** The correct repair is whichever action
+  restores agreement. Sometimes that is finishing the operation, not undoing it.
+- **The rule is about CONSISTENCY, not about undoing.** "Revert on raise" is a heuristic for the
+  common case; the invariant underneath it is that the program and its ledger must agree.
+
+## An applier that REWRITES rows must be convergent from the start
+
+Most appliers append: a row is written once and never touched again, so a half-finished run always
+leaves the artifact ahead of or behind the program in a detectable way. An applier that **rewrites**
+existing rows is different — a partial run can leave both sides consistent, and then re-running is
+the natural repair rather than a hazard.
+
+So write it to converge: **a target that already carries the intended value is a corroboration, not
+a conflict.** Skip it and continue. This is the same three-way guard a good applier already uses to
+tolerate a name it applied in an earlier session (*present and correct → skip; present and different
+→ raise; absent → apply*), and it costs three lines.
+
+Written that way, the incident above would have been a re-run rather than a diagnosis. Written the
+other way, a raise leaves an operation that **cannot be completed except by hand** — which is how a
+careful project ends up hand-editing a ledger.
+
+### An applier whose population rule is the condition its own apply DESTROYS cannot converge
+
+The previous section says every mutating applier needs a state meaning *"already exactly what I
+would write"*. Here is the way that state can be present, correct-looking, and **unreachable by
+construction** — with nothing in the code to show it.
+
+**Measured.** An applier promoted a ground-truth symbol to primary at every address whose primary
+was a placeholder. Its population rule was, in full, *"an address carrying an authoritative symbol
+whose primary is placeholder-shaped."* It applied cleanly over four addresses, every guard passed,
+the invariant bracket held, the post-cascade re-assert held. A bare re-run then raised
+`VACUITY: 0 shadowed addresses` **on its own successful output** — because promoting the real name
+is exactly what stops an address being shadowed. The apply had consumed its own population.
+
+The three-state machine was there. `already` could never be entered: an address in that state no
+longer satisfies the membership predicate, so it is not a candidate to be classified.
+
+- **Reading the applier does not reveal this.** The branch is syntactically reachable and
+  semantically dead, and every review of the code says it handles the re-run case. What reveals it
+  is *running the applier a second time* — which is the argument for a bare re-run being a standing
+  step after every apply rather than a nicety.
+- **The fix is the rule this file already states, pointed at a new symptom:** derive the population
+  from a **repo** fact. Here, the union of the program-derived set and the human-approved census.
+  That rule was written for partial-failure resume; it is the same fix, and noticing that saved
+  designing a second one.
+- **The vacuity guard has to move with the rule.** *"Zero candidates is a rule fault"* is true only
+  before the round runs. The check that survives an apply is *"zero to write AND zero already"* —
+  otherwise the guard that protects you from a broken rule becomes the thing that fails on success.
+
+Ask it of any applier whose predicate mentions the state it writes: **if this runs to completion,
+does its own selection still find these rows?** A predicate over *what is missing* answers no.
+
+### A print is not a write
+
+**Measured.** A mutating applier ended with
+`print("LEDGER: append these rows to <ledger>")` and left the append to a human. The apply landed
+two agent-tagged symbols the ledger did not carry — precisely the both-directions provenance
+invariant the project's gates exist to catch. Nothing in the applier failed; it reported success,
+and the discrepancy existed for exactly as long as it took someone to read the output and act on
+it. Had the output been long, or the session ended, the gate would have caught it later and the
+round would have looked like collateral damage rather than an unfinished step.
+
+**An applier that instructs a human to finish it has not finished.** The ledger append belongs
+inside the same run as the mutation. Two details make that safe:
+
+- **Write it convergently** — skip a row already present for this key — so a re-run cannot
+  accumulate duplicates.
+- **Expect the fix to expose a second defect in the apply itself.** Making the ledger re-runnable
+  forces the *program* side to be re-runnable too, and there the trap is that
+  `createLabel`/`setName` with a value already present is a **silent no-op**. A delta bracket of
+  the form `symbols == before + N` then raises on a program that is already correct. Count what
+  the run actually writes, not what its census contains.
+
+### Creating a function makes its whole body visible to every function-walking sweep at once
+
+**Measured.** One function created at previously-unclaimed bytes changed **four** committed
+artifacts. Two were expected (the symbol inventory, and the string inventory's "referenced from no
+function" cell). One was a bonus corroboration. The fourth was a survey of virtual-dispatch sites,
+which gained **three** rows — dispatch sites that had always been in those bytes and were invisible
+only because the bytes belonged to no function.
+
+**Budget the artifact churn of a function-creating apply against the BODY, not against the one row
+you meant to add.** Every sweep in the project that iterates defined functions now sees an
+additional body's worth of instructions, and each will report whatever it is built to find there.
+
+The upside is real and worth expecting rather than being surprised by: two of those four changes
+were *corroborations arriving free* — an independent sweep reported the new body has the structural
+shape its claimed role requires, which is a witness nobody had to design. And where the sweep names
+functions, check the change shows your name **filtered out**: seeing the agent-name filter visibly
+suppress your own fresh name in a regenerated artifact is the anti-circularity rule being exercised
+rather than merely present.
+
+### When a gate refuses your row, change the row's HOME before you change the gate
+
+**Measured, twice in one round, and both refusals were right.** A round wrote a recovered 16-byte
+type into the program and then had to record it. The first artifact it tried was the project's
+decided-types file, on the strength of an earlier round's note saying *"adding a row here is an
+approved step"*. The type gate raised: every row in that file is joined against a harvested
+evidence file which the project may not regenerate, and the type in question had been discovered
+in a later phase with no such evidence. The second was the field-type-upgrade file, on a precedent
+that matched the situation exactly in substance — an exported member accessing a block cell at
+element width, with an in-body element-count bound. That gate raised too: its guard verifies
+`element_size * N == span` **from the ctype string**, so it accepts only scalar element names and
+cannot size a struct.
+
+Widening the second guard's pattern was one line. It would have been wrong, and the reasons
+generalise:
+
+- **A guard in a producing sweep is a rule, and changing it owes the full two-step diff and its
+  own poison.** That cost is worth paying when the rule is wrong. It was not wrong; it was simply
+  built on a mechanism (string arithmetic) that cannot express this case.
+- **It was unnecessary.** A third committed artifact — the one whose stated purpose is that *"a
+  rebuild-from-artifact is only safe if every decision lives in an artifact"* — already resolved a
+  ctype's base through the type manager and built arrays from it, so it accepted the row unchanged.
+- **The test to run first:** is there another committed artifact whose consumer already takes this
+  row as written? If yes, the guard is not the problem and the row is in the wrong file.
+
+Two smaller things fell out of the same round:
+
+- **A note that authorises an artifact write grants the PERMISSION and does not settle the HOME.**
+  *"Adding a row to X is an approved step"* is a statement about sign-off. Whether the row belongs
+  in X is a separate question with its own answer, and the gate is the thing that knows it.
+- **Verify the retreat.** After reverting both rejected appends, the check that the withdrawal was
+  clean rather than approximate is that both files are **byte-identical to the base revision** and
+  appear in no diff. A revert that leaves a stray blank line or a re-ordered row is a content
+  change nobody adjudicated.
+
+### A report that cannot see the effect it claims to measure is worse than no report
+
+**Measured.** An applier ended with a section printing each affected function's signature, to show
+the payoff: a 16-byte by-value return should switch to the hidden return-storage-pointer
+convention. It printed `getPrototypeString(...)`, which omits both `this` and the hidden return
+pointer — so it rendered the identical string before and after, while the committed symbol
+artifact recorded the parameter count going **1 → 2** with the storage pointer added. The round's
+genuine result read as a non-result, and was only recovered by diffing the artifact.
+
+- **Pick the accessor by what it is documented to include**, not by which name reads best. Where a
+  compiler-introduced parameter is the thing you are looking for, walk the parameter list (which
+  includes auto-params) rather than a formatted prototype string.
+- **When a predicted effect appears not to have happened, suspect the instrument before the
+  prediction.** A silent report and a real non-event are indistinguishable from inside the script,
+  and one cheap artifact diff separates them.
+
+### Predict the datatype delta with an account BY NAME, before the run
+
+Same round: predicted `+1` and got `+1`, where the naive reading says `+2`. The apply wrote a
+struct **and** an array of it, but the struct already existed as a demangler-created 1-byte
+placeholder and was **edited in place**, so only the array was new. That is knowable before
+running — check whether each type you are about to write already exists — and it converts the
+bracket from something you re-pin after the fact into something that confirms your model of what
+the apply does.
+
+### An option's label and its description must make the same promise
+
+**Measured, and the failure is in the asking rather than the answering.** A census option was
+presented to a human as *"add a shared typedef too"* while its description offered only *"record
+in the artifact that these elements share a domain"* — a type versus a note, with the more
+attractive wording on the label. The human chose quickly, then came back to ask what the typedef
+had been. That is how the mismatch surfaced at all.
+
+The whole point of approving a census **to the row** is that the approval is informed. A label
+that promises more than its description delivers defeats that, and no amount of accuracy further
+down repairs it: **the label is what gets read.**
+
+- **Write the label at the same specificity as the description.** If the label names a mechanism
+  ("typedef", "retype", "rename"), the description must propose that mechanism.
+- **Treat a fast answer as a reason to re-read your own option, not as evidence it was clear.**
+- When the discrepancy is found, put the choice again and say plainly that the first framing was
+  wrong — do not quietly deliver the more attractive reading on the grounds that it was chosen.
+
+## An applier needs a FORWARD recovery, not only a rollback
+
+The rule *"an applier whose post-check can raise must ship its recovery"* is usually read as *ship a
+revert*. Half the failures need the other direction. Measured: an applier mutated 23 functions, ran
+its cascade, **passed its first post-check**, and then crashed in the *second* on a variable-name
+clash with the scripting bridge — leaving the program correct, verified, and ahead of its ledger.
+Reverting a correct mutation in order to re-apply it identically is churn, not safety.
+
+So ship a **`finish` mode**: re-run every post-check and append the ledger, mutating nothing. Two
+details make it trustworthy:
+
+- Take its control-group baseline from the **committed artifact**, not from an in-memory capture —
+  the artifact survives the crash, the capture is exactly what was lost.
+- It must still be able to *fail*. `finish` re-asserts the applied state rather than assuming it; a
+  half-applied program must not be ledgered as complete.
+
+The same round supplies the reason the snapshot must exist at all: **write the BEFORE state to the
+artifact before the first mutation**, never to a local. Here it was already on disk when the crash
+happened, so nothing was lost.
+
+## A gate that REGENERATES artifacts can revert a repair between adjudication and commit
+
+Measured, and it cost a commit. A round repaired a defect in a committed artifact, diffed it, and
+adjudicated the change. The stability gate — which regenerates most committed artifacts to prove they
+are reproducible — then ran, **silently overwrote the repaired file with the defective output**, and
+the round committed that. The commit undid its own fix. It surfaced only because the gate was re-run
+*afterwards* and compared against the commit.
+
+**Rule: a green gate run before `git add` says nothing about what was actually staged. Re-run any
+artifact-regenerating gate AFTER committing, and diff against the commit.**
+
+## A harness that EXECs source files must open them with an explicit encoding
+
+The root cause above is worth its own line, because it is invisible and it breaks the one property
+such a harness exists to guarantee. The gate loaded each producer's source with a bare
+`open(path).read()`. The disassembler's own script provider decodes scripts as **UTF-8**; a bare
+`open()` uses the platform's locale default, which on a Windows host is **cp1252**. A single non-ASCII
+character in a producer's source therefore arrived mangled, and the producer — correctly encoding its
+output as UTF-8 — wrote it back **double-encoded**.
+
+Two consequences. **The same script produced different bytes down the two execution paths**, which is
+precisely the byte-identity property the gate was built to test. And an encoding check over the
+artifacts could not see it: double-encoded text is *valid* UTF-8, so a gate asserting
+**decodability** passes on it forever. **Assert what you mean: decodable is not correct.**
+## A pre-mutation snapshot must be APPEND-ONLY, or the second round destroys the first round's recovery
+
+The rule *"capture the BEFORE state into the artifact before mutating"* has a failure mode that shows
+up on its second use, not its first.
+
+Measured: an applier wrote its pre-mutation snapshot with an overwriting write. Re-pointed at a later
+round's three targets, it would have replaced the previous round's twenty-three rows — that round's
+*only* revert source — with three, **while executing the very rule that exists to make recovery
+possible**. The safety mechanism was about to erase its own history, and the dry run looked perfect
+because the snapshot it wrote was correct for the rows it knew about.
+
+Make it append-only and give every row the round that wrote it; make `revert` filter on that column.
+Then backfill the existing rows with theirs, so the file is consistent rather than half-labelled.
+
+**The general rule: any artifact whose purpose is recovery is append-only and self-identifying. An
+overwriting safety mechanism is not one.**
+
+
+## Look for the smaller change before you accept the blast radius
+
+A queued item can be right about the risk and wrong about where the change has to go, and the
+warning about blast radius is what stops anyone looking for a cheaper site.
+
+Measured. A project's construction-body scanner tracked "which registers provably hold the object
+pointer at offset 0" — a set several sweeps, appliers and diagnostics all read. Member sub-objects
+are constructed through `LEA ECX,[this+K]`, which by design never enters that set, so a chain walk
+driven by it could not follow them and a large fraction of every class's storage went unwitnessed.
+The backlog scoped the fix as *"make the set offset-aware"*, correctly noted that it was shared by
+a dozen consumers, and required a two-step old-rule-vs-new-rule diff with the old rule run live.
+
+The set did not need changing. The same function already carried a **parallel** alias tracker
+resolving `reg -> this + delta` for an unrelated side channel, and the call branch already ran
+before the caller-saved registers were cleared — so the offset could simply be *read* at the site
+the old rule was rejecting. What shipped was a new key appended at an existing site, with a
+perturbation surface that was **empty by construction**; the two-step diff then confirmed that
+rather than discovering it.
+
+So: when a change looks like it must touch shared machinery, **enumerate what the function already
+computes before you change what it computes.** A side channel added for one purpose is often the
+capability the next round needs, and the cost of checking is one read of the file.
+
+## Document what a rule cannot witness, beside the rule that makes it sound
+
+The same module explained, correctly and at length, *why* the offset-0 discipline is sound —
+member constructors receive `LEA ECX,[this+K]`, a class with its own vfptr cannot embed a member at
+offset 0, therefore the set is trustworthy. What it never said is the consequence: that every byte
+a member constructor writes is invisible to any consumer driven by that set, **by construction**.
+
+The cost of the omission was not a wrong number, it was a *misread* one. The producer emitted a
+3,152-byte region marked `unknown` — it had seen the region and could not name it — and downstream
+that read as "nobody has looked here yet" rather than "this instrument cannot look here". Four
+months, and a class scoring 7% coverage that nobody re-opened.
+
+A soundness argument names a blind spot whether or not it says so. **Write the blind spot down in
+the same comment**, in the vocabulary a coverage report uses, so the honest `unknown` in the
+artifact can be traced back to the rule that guarantees it.
+
+## A deferral is only honest if something can find it again
+
+It is often right to apply markup that is correct but incomplete — a struct with an undefined
+region, a field typed by width and not by meaning, a layout flattened from an ancestor because the
+immediate base's extent is unknown. Claiming less than you know is the whole discipline. But
+"we'll revisit this when we know more" is a promise that decays the instant the round ends, unless
+the revisiting is mechanised.
+
+The cheap mechanism is a **worklist artifact**: one committed row per deferred decision, carrying
+the identity of the thing deferred, the exact region affected, and what was used instead.
+Measured: 21 structs were built from an ancestor rather than their immediate base because three
+base sizes are unrecoverable; each skip became a row of `(class, skipped base, gap lo, gap hi,
+prefix actually used)`. When one of those sizes later becomes measurable, the affected structs are
+a **query**, not an archaeology exercise — and the applier's state machine already refreshes a
+flattened prefix whose source has changed, so the rebuild is a re-run rather than a new round.
+
+Three properties make it work, and the third is the one usually missed:
+
+- **The row names the region, not just the class.** "This class is approximate" is not actionable;
+  "bytes [840, 872) of this class are undefined because sizeof(X) is undecided" is.
+- **The row names what was used instead**, so a later reader can tell a deliberate substitution
+  from an omission.
+- **The artifact is covered by whatever checks your committed artifacts** — reach model, encoding
+  gate, stability canary. An uncovered worklist is a text file that silently stops being
+  regenerated, which is the same as not having written it.
+
+An undefined region plus a sentence in a commit message makes exactly the same claim about the
+binary and none of the claims about the future.
+
+## Split an apply by RISK CLASS, so stronger evidence cannot launder weaker
+
+When a round has several changes to make and they all pass their checks, the efficient-looking
+move is one apply with one census. Resist it whenever the changes rest on **different witnesses**.
+A single census makes the population look homogeneous, and if one subset later proves wrong there
+is no way to attribute the failure — the strong evidence and the weak evidence shipped together
+under one number.
+
+Measured. 76 signatures were repaired in one round and deliberately applied as two:
+
+- **58 `__fastcall` → `__thiscall`.** Both conventions pass argument 1 in the same register, so
+  the relabel is *abi-identical* — it renames what the code already does. The witness is a
+  liveness probe showing the second register carries nothing.
+- **18 `__stdcall` → `__thiscall`.** This *adds* a parameter the signature never modelled, which
+  is a claim **about** the ABI rather than a relabelling of it. The witness is entirely different:
+  sibling implementations of the same vtable slot dereferencing the object register.
+
+Two censuses, two approvals, and a **checkpoint between them**, so the program has a named version
+in which the safe half is applied and the risky half is not. If the second half ever has to be
+reverted, the revert target exists and is not entangled with the first.
+
+The test is not "how confident am I" but **"if this subset turned out to be wrong, would I be able
+to tell which evidence failed, and could I undo it alone?"** If the answer to either half is no,
+it is a separate census.
+
+## When one operation makes two claims, say which one carries the risk
+
+Some applies are a single call that asserts two independent things. Setting a `__thiscall`
+convention with an empty formal parameter list, for instance, does a *convention relabel* and a
+*parameter retype* at once, because the disassembler then derives the implicit `this` from the
+function's parent class. Written up as "we relabelled 78 signatures", the round looks uniform. It
+is not:
+
+- the **relabel** is ABI-identical — both conventions pass argument 1 in the same register — so its
+  only claim is that the *second* register carries nothing, which register liveness decides
+  mechanically and independently;
+- the **retype** rests entirely on the parent namespace naming the right class, and on a binary
+  with no RTTI and no debug records that namespace is *your own prior inference*.
+
+Separating them is what tells you which witness the round actually needs. Once written down, the
+question "what corroborates the namespace, other than us?" has an obvious answer — the set of
+classes whose vtable holds the body, which comes from the binary — and it stops being optional.
+
+**And make that rule DIRECTIONAL rather than exclusive.** The tempting form is "a body appearing in
+several classes' vtables means the attribution is unreliable, refuse it." That is wrong: a base
+method appearing in 21 subclass vtables *is* the defining class's method — the slot is inherited,
+not ambiguous. The correct form is *the claimed owner must be an ancestor-or-self of every class
+whose vtable holds the body*. Measured, the directional rule kept 10 rows the exclusive one would
+have discarded while still refusing 4 that genuinely contradicted the namespace.
+
+Two mechanical notes that cost a guard each:
+
+- An empty formal list means the tool injects the implicit parameter **and nothing else**, so a
+  body that really takes further stack arguments has them silently DELETED. No count notices —
+  functions, symbols and types all stay put while the prototype quietly narrows. Refuse any target
+  with more than one modelled parameter rather than truncating it.
+- Re-assert **after** the cascade. An AI-tier signature is exactly what the demangler and the
+  analyzer are free to overwrite, since those tiers rank equal.
+
+## A metric moving the WRONG WAY can be the recovered layout finally telling the truth
+
+After applying a type, expect some quality metrics to get worse, and read the mechanism before
+calling it a regression.
+
+Measured. Typing 78 `this` pointers moved the good numbers hard — index expressions through the
+wrong type **998 → 0**, member accesses through the object **4 → 1708**, named (non-placeholder)
+fields **988 → 1725**, with 78 of 78 bodies improving. In the same measurement, *undefined locals*
+over those bodies **rose 167 → 334**, 40 bodies worse against 5 better.
+
+Both easy write-ups were wrong. "Cascade noise" is refuted by the control group, which held at
+190 → 190 across the same re-analysis. "The apply degraded the decompilation" is refuted by the
+body itself: `undefined1 *puVar1 = &this->field_0xf0;` — the new undefined locals come from taking
+the address of struct fields **not yet recovered**. Before the apply the decompiler had no struct
+to consult and *guessed* a type from usage; afterwards it propagates the layout's own honesty about
+which bytes are still unknown.
+
+So the number is real, it is caused by the apply, and it is not a regression: it is the recovered
+type refusing to invent what it does not know. **The worsened bodies become a query for the next
+field-recovery round** — they name exactly the classes whose layouts have the most unrecovered
+span. Report it at the same weight as the wins; a round that only reports the metrics that moved
+its way is choosing its own scoreboard.
+
+## A recovery record a later run of the same script deletes is not a recovery record
+
+Applies that write a pre-mutation snapshot — the old prototype, the old type, the old name — usually
+write it with a plain overwrite, because the script was conceived as running once. Scripts that
+apply an approved census get run again for the *next* approved census, and the second run silently
+destroys the first round's only pre-apply state.
+
+Measured. An applier ran twice, for two separately approved censuses. The second run replaced 78
+snapshot rows with 57. Nothing was actually lost — every one of the 78 old prototypes was
+byte-identical in the append-only apply ledger, verified row by row — but that was luck, not design:
+the ledger happened to carry the same field. The fix is either a file per round (which is what the
+same project's other snapshots do, and it shows in their names) or one **append-only** file keyed by
+round and version, which is the shape the apply ledger already has.
+
+Generalise it: **any artifact written by a script that can legitimately run more than once should be
+append-only, or keyed so a second run cannot address the first run's rows.** And when you find one
+that was not, check whether the lost data is recoverable elsewhere *before* concluding damage — and
+say plainly that recovery was luck rather than design, so the fix does not get filed as optional.
+
+
+## A new VALUE in a column something gates on is a schema change
+
+Adding a new confidence label to an artifact looks additive — the column already exists, the
+header does not move, every row still parses. It is not additive, because consumers gate on the
+SET of values, not on the column:
+
+```python
+HUB_SIZE_CONFIDENCE = ("bounds_pinned",)          # and deliberately nothing else
+DECIDED_LABELS      = ("bounds_pinned", "own_alloc", "ai_decided")
+```
+
+Measured on one project: a round introduced a new label for a new witness, and because that
+witness also fired on five rows already decided by another route, those five were RELABELLED. The
+sizes did not change by a byte. A downstream producer nevertheless stopped seeing five classes and
+raised, because its allowlist admitted the old label and not the new one — and the exclusion was
+deliberate, not an oversight, so widening it would have been the wrong repair too.
+
+Two rules, and the second is the one that generalises furthest:
+
+- **Before introducing a value into a column, grep for the allowlists.** They are literal tuples
+  and they are scattered; in that project six sites gated on the same vocabulary, of which two
+  would raise, three would silently skip, and one silently misclassified a result into a
+  neighbouring bucket. Report them as *raises* versus *silently skips* — the silent ones are the
+  ones that cost you a round later.
+- **A new witness must not relabel a row it did not decide.** Where an existing rule already
+  reaches the same value, leave the row's label alone and record the new witness's agreement in
+  the row's note. That is strictly better than the relabel: it keeps every downstream consumer
+  working, and it puts the corroboration in the artifact instead of replacing the label that
+  carried it.
+
+The same shape has been seen for a new KEY (a new class or table id propagating into a channel
+that keys on it). A new value is the same event in a narrower place, and it is harder to spot
+precisely because nothing about the file's shape changes.
+
+## A rebuild is a deletion of everything not in the plan
+
+The common shape for applying a recovered struct is *build a fresh type from the plan, then swap
+it in* — in Ghidra, `dtm.replaceDataType(old, freshly_built, true)`. It reads as an update. It is
+a replacement: **every component of the old type that the plan does not reproduce is gone**, and
+nothing in the call says so.
+
+This survives a long time by accident. Measured on one project: an applier had used exactly that
+path for dozens of program versions without ever losing anything, because the classes carrying a
+component from *some other round* always classified "already equal to the plan" in its state
+machine and were therefore never rebuilt. The safety property was held by the **state machine**,
+not by the apply, and nobody had written it down. One upstream change — an unrelated artifact
+gaining a field, so a plan gained a cell — moved one class out of that state, and the rebuild
+became reachable with another round's in-place work in its path. A precondition refused, which is
+the only reason this is a lesson and not an incident.
+
+**The rule.** When a mutating step REPLACES a whole object rather than editing it in place,
+enumerate what the replacement does not carry, and assert it. "The plan is complete" is not a
+statement about your plan; it is an assumption about every other round that has ever touched the
+same object. Three things make it cheap:
+
+- **Classify every live component before allowing a rebuild**, into *replaced* (inside the planned
+  ranges — and permitted only if it is anonymous or keeps its name, so a rebuild cannot silently
+  rename recovered work), *carried* (outside them), and *straddling the edge* — which must
+  **refuse**, because half of it would be rebuilt and half dropped and nothing can say which half
+  was decided.
+- **Re-place the carried components verbatim** after the plan's own, exactly as a flattened base
+  prefix is copied.
+- **Reuse the tolerance predicate you already have.** If a post-apply check already decides which
+  unplanned components are legitimate, call that same function pre-apply rather than writing a
+  second rule; a tolerance rule with two homes will diverge.
+
+The tell that you are exposed: an apply that constructs a new object from a plan and hands it to a
+replace/swap API, in a codebase where more than one round can touch the same object.
+
+## A WIDTH-PRESERVING type apply is not layout-neutral — ask what it makes DECIDABLE
+
+Everything else on this page is about an apply that moves bytes: a wider field, a collateral
+deletion, a rebuild that drops what was not in the plan. **The apply that needs no width check at
+all is the one with no width story.** Measured: a 64-byte opaque cell was retyped from
+`uint8_t[64]` to `Vec[4]`. Sixty-four bytes before, sixty-four after. Nothing tiled differently, no
+coverage denominator moved, `sizeof` was untouched, and it was the safest-looking write of the
+round.
+
+It had two consequences nobody predicted, and neither is visible to a width- or coverage-based
+check.
+
+**It made a loop LEGIBLE for the first time, and a producer read the new legibility wrong.** A body
+the binary itself names — at a *non*-destructor slot in 32 vtables — walks that array with
+`ADD EBX,0x10` and a literal trip count of 4. Before the retype the element type was illegible and
+the decompiler's simplification decided nothing; the committed artifact holds the near-miss with
+`why=rejected_empty`. After it, `0x10` arrived as a PTRADD element size, and **16 was minted as an
+exact size witness for two classes whose real sizes are 1400 and 1148.** The apply did not create
+the defect; it removed the illegibility that had been *suppressing* it.
+
+**And it left the same cell stale in every flattened copy** — 22 of them, taking two further
+applies, because refreshing a base exposes its descendants and the second wave is larger than the
+first probe reports.
+
+The rule: **before any type apply, enumerate the producers that scan that cell and ask what each
+one can now decide that it could not decide before.** A cell nothing could read is a cell nothing
+could read *wrong*. Retyping it hands every scanner a new operand, and the scanners whose scope was
+never enforced (see `harvesting-traps.md` on a docstring claiming a scope the code lacks) will read
+it at once. Expect the flattened-copy cascade to be larger than predicted, and re-run the drift
+probes after *any* base-struct edit, width-preserving or not.
+
+## A multi-token applier's invariant pin is PER-SESSION, not per-round
+
+The invariant bracket above assumes the BEFORE value was measured before anything in this round
+ran. That assumption breaks the moment one applier has more than one token and the tokens run
+hours apart. Measured: an applier pinned `datatypes` at 1641 and refused its second token, because
+the *first* token of the **same round** had minted two types an hour earlier. The pin was correct
+and the refusal was the bracket working.
+
+Two consequences:
+
+- **A pin derived from a previous round's BEFORE value is stale the moment any sibling token
+  runs.** Two tokens of one applier are not independent inside one session.
+- **Re-pinning is legitimate only with the reason recorded in the file** — "re-pinned to 1643
+  after establishing that the `prebuild` token minted two types", never a silent bump to make a
+  run go green. Write that sentence into the applier's own refusal message, so the next person to
+  hit it is told which of the two things they are doing.
+
+## A repair WIDER than its census is an unapproved apply wearing an approved one's write-up
+
+When a census licenses a repair, it licenses a blast radius, and the radius is whatever the census
+actually measured — not whatever the defect touches.
+
+Measured. A scanner replaced its object-alias tracker on every allocator call, and the same
+replacement governed four distinct outputs: the per-offset cell list, the two access maxima, the set
+of registers treated as holding the object, and the call receivers derived from that set. The census
+diffed the **first two**. Repairing all four was one variable away and would have changed class
+hierarchy derivation and class attribution — with no census at all, in the same commit, under the
+same write-up.
+
+So the repair touched the two channels the census covered and left the others alone, with the reason
+in the code. The remaining half became its own queued round with its own differential.
+
+The test to apply before widening a fix: **for each output the defect touches, did the census measure
+it?** If not, the honest move is two rounds. It feels like hesitation and it is the difference between
+a change somebody approved and a change that merely shipped next to one.
+
+---
+
+## A `note` COLUMN IS PROSE AND ROTS LIKE PROSE — no check reads it
+
+Evidence artifacts grow a human-readable `note` or `reason` column, written once when the rule
+had one branch. It is the line a reader of the CSV actually sees, and **nothing joins against
+it**, so it is the least defended text in the repository.
+
+Measured. Every pinned row of a size artifact said *"is within alignment of the descendant alloc
+floor"*. Over the 27 pinned rows at the time of the audit: **17 were true**, **5 had been false
+for twenty-four rounds** — since a second witness became a possible source of that bound — and 5
+more would have been false from the round doing the audit. The round that introduced the second
+source had fixed the adjacent *raise* to name its source, with the reasoning *"a raise that
+misattributes its own evidence sends the next reader to the wrong artifact"*, and left the note
+untouched.
+
+- **When a value can come from more than one witness, the note must name the witness**, not a
+  category the value used to belong to. Interpolate the source variable; do not restate it.
+- **Audit notes when you add a producer of an existing quantity.** The same sweep that greps for
+  messages naming the old producer as the only one should grep the note templates.
+- Accept that this cannot be gated cheaply, and prefer notes that are *derived* from the same
+  variable the decision used, so a wrong note requires a wrong decision.
+
+---
+
+## A COMMENT THAT NAMES A CAUSE IS A MEASUREMENT, AND IT DECAYS LIKE ONE
+
+The note-column entry above is about prose inside artifacts. This is the same failure one layer
+up, in the code comments a reader trusts *more*, and it is worse there because the comment usually
+names a **culprit**.
+
+Two measured cases from one round, both attached to guards that are still correct:
+
+- A sweep refuses a class because a scan returns the wrong table, and the comment records the
+  cause as *"[this artifact]'s column is a join, not ground truth."* Re-measured: the artifact's
+  row is **right**, and the scan is wrong. The class had been losing a recovery route to an
+  innocent artifact's reputation, and any later round reading that comment would have gone to
+  audit the wrong file.
+- A narrowing was justified by *"the constructor builds an EMBEDDED member through a second
+  register, and the tracker had lost that register's delta."* Re-measured: the register holds a
+  **fresh heap allocation** three instructions after the allocator call, its size immediate
+  matching the allocated class's own construction extent to the byte. There was no delta to lose,
+  because the pointer is not relative to the object at all.
+
+Both narrowings survived; both stated reasons were wrong, and each pointed the next reader
+somewhere useless. **A comment that says WHY is an empirical claim with a date on it.** When a
+round measures one of them false, correct it in the same commit even if no behaviour changes —
+and prefer comments that cite a re-derivable command or artifact over ones that assert a
+mechanism, so the claim can be re-run rather than re-believed.
+
+## A RAISED SCRIPT COMMITS WHAT RAN BEFORE THE RAISE — rehearse past the first mutation, and roll back on raise
+
+Measured on one 1999 MSVC/x86 binary, Ghidra 12.1.2 through PyGhidra: an applier dry-ran clean
+against every live guard and three poison arms, then raised in its second stage on an API call written
+from memory -- a line no dry run reached, because the dry run stops before the first mutation. The
+script manager **committed** the first stage anyway: a read-back probe found 249 of 249 function
+signatures changed, a partial type build, no cascade, no ledger rows, an **empty undo stack** and
+`isChanged()` true. An undo-last-transaction recovery had nothing to undo; the only exact way back was
+closing the program without saving and re-measuring the saved version.
+
+Two changes close it, and the second must be exercised, not assumed:
+
+- **Rehearse the post-mutation code in the dry run.** `StructureDataType(...)`, `FunctionDefinitionDataType(f, False)`
+  and `PointerDataType(...)` build types in memory without touching the DataTypeManager, so a dry run
+  can assemble every planned type and execute the API calls the apply will make. A dry run that only
+  runs guards tests the guards.
+- **Wrap the whole mutation section in `try: ... except: end(False); raise`.** `end(False)` aborts the
+  script's own transaction. Demonstrate it with a mode that performs the real first stage and raises
+  on purpose, then read the program back: every changed row must be in its pre-state.
+
+Origin: re-metal-fatigue §421 (`notes/LESSONS.md`); the same "a dry run cannot test the code after
+the mutation" failure had been recorded one round earlier, and recording it did not prevent it.
+
+**A REVERT IS A MUTATION, and it is the path that gets written without the wrapper.** Measured again
+(§468, Ghidra 12.3): an applier whose apply path carried the `try/except: end(False)` wrapper gained a
+`revert` mode after its render trade lost, written in a hurry and outside that wrapper. Its first run
+cleared a 256 KB array and re-created the old pointer, then raised on `DataTypeManager.remove(dt,
+monitor)` -- an overload recalled from memory that does not exist (it is `remove(DataType)`). The
+clear and re-create were committed. What recovered it cleanly was writing the revert to CONVERGE --
+every step reads the state it finds and does only what is still undone -- and then proving the end
+state by re-rendering: every function touching the global re-dumped, and only the ones the kept
+changes explain differed from the pre-round corpus. Two rules: **every mutating mode, the undo
+included, sits inside the wrapper**, and **a revert is written idempotent**, because the first time
+it runs is usually the time something already went wrong.
+
+## A NEW APPLIER INHERITS NONE OF THE REFUSALS THE OLD APPLIERS OF ITS KIND CARRY
+
+A project policy that lives as a refusal inside each applier -- "a member name under a placeholder
+class cannot be applied", enforced separately by a namespace-move applier, a slot-reconciliation
+census and a citation verifier -- is invisible to the next applier written for a different reason. In
+one project a census tool licensed four named functions into placeholder-class namespaces, the user
+approved it, and only the post-apply witness run's citation verifier refused them; they were reverted
+at the cost of a program version. The census re-derived the physics (conventions, liveness, stack
+purge) from first principles and none of the policy.
+
+Before writing an applier that moves names, namespaces or signatures, **search the existing appliers
+and censuses of that kind for the rows they refuse, and give the new census every refusal it should
+share** -- as a rule in the producer with a demonstrated arm, not a note. Origin: re-metal-fatigue §422.
+
+## REHEARSE THE MUTATION TO PRICE IT — and give every API you write through for the first time its own gate
+
+**A rehearsal is a census the decompiler grades.** Measured on one 1999 MSVC/x86 binary, Ghidra 12.1.2:
+an applier's `rehearse` mode performed every retype inside the script transaction, re-decompiled the
+functions it should change plus a control set it should not (bodies naming none of the classes
+involved), printed the payoff, and called `end(False)`. The table the user approved -- overrun renders
+64 -> 34, removed "unreachable" blocks 18 -> 0, 40 of 40 controls byte-identical -- was the decompiler's
+own output, and the apply reproduced it row for row. Verify each rehearsal's rollback with the NEXT run
+(`references/api.md`: the rollback lands when the outer transaction closes). Four rehearsals cost about
+ten minutes and exposed three defects in the applier before approval, where they are cheapest. Dump the
+C, not only counts: a count reaching 0 can be a raw `(*(code *)...)` render standing in for the defect.
+
+**Retyping a decompiler local creates a provenance channel no symbol-based gate reads.**
+`HighFunctionDBUtil.updateDBVariable(highSymbol, None, dt, SourceType.AI)` -- the call Ghidra's own
+Retype Variable action makes -- commits a database variable tagged AI, and it also commits the
+decompiler's current NAME with that source. The variable is NOT in `SymbolTable.getAllSymbols(True)`:
+AI symbols by symbol type were identical before and after 14 commits. A ledger gate keyed on AI symbols
+therefore cannot see a local appear off the books, vanish under re-analysis, or be retyped. Enumerate
+`Function.getLocalVariables()` filtered on `getSource() == AI` against a ledger, both directions and by
+type -- and demonstrate all three arms on a poisoned ledger copy.
+
+**A parameter type change does not move the SIGNATURE source.** `updateDBVariable` on a parameter symbol
+took the new type and `Function.getSignatureSource()` stayed ANALYSIS -- ungraded by a signature ledger
+keyed on AI, and tied in priority with every analyzer that may rewrite it. Set it explicitly
+(`setSignatureSource(SourceType.AI)`) and ledger the prototype.
+
+**Re-assert the thing written, not the path that found it.** The applier located each object by tracing
+the call site's CALLIND back through its first argument and the vtable-pointer load; after the commit the
+same trace stopped resolving to a symbol at 16 of 22 sites, in functions whose renders had gone to 0. A
+re-assert on that trace reports a working change as lost. Check the variable by name and the committed
+database row.
+
+Origin: re-metal-fatigue §423 (`notes/phase4-object-retypes.md`).
+
+## TYPE THE CELL A LOCAL IS LOADED FROM BEFORE TYPING THE LOCAL — and a struct cannot fix a call on an under-typed object
+
+Measured on one 1999 MSVC/x86 binary (Ghidra 12.1.2), two consequences of how virtual-call renders
+repair:
+
+- **A field retype propagates into the locals loaded from it.** A local living in hash (unique) storage,
+  which a site-trace resolver could not reach, rendered correctly once the struct member it was cached
+  from was retyped -- along with two more renders in another function. Rehearse the field first and
+  count what propagation fixes before writing local rows for it.
+- **Building a class's vtable struct does not repair a call on an object DECLARED as an ancestor.** The
+  call keeps borrowing the ancestor struct's definition for that slot; when that borrowed definition has
+  no parameters, the CALLIND has no `this` input at all, so a resolver keyed on the first argument cannot
+  find the object even after the struct exists. The vtable-pointer load is then the only witness of the
+  dispatching object. The prediction that the struct alone would fix it was wrong.
+
+Origin: re-metal-fatigue §424 (`notes/phase4-object-retypes-2.md`).
+
+## A DRY RUN THAT WRITES AN ARTIFACT IS A MUTATION — diff what it writes the first time its population changes
+
+A dry run is supposed to be free. It is free for the *program*; an applier that also emits a
+worklist or census artifact from its current plans is mutating the *repo*, and that write is only
+harmless while every run plans the same population.
+
+Measured on one project: a struct applier rewrote its "structs built from an ancestor" worklist on
+every run, dry or not. For 30 program versions every run planned the same classes, so the file never
+changed and its canary excuse read *"dry run regenerates it"*. The first run with a new population arm
+planned four other classes and wrote **0 rows over the 21 committed** — the rebuild-is-a-deletion
+shape, in a recovery artifact, from a dry run nobody expected to touch anything. It was caught by a
+`git status` before staging, not by any gate: the artifact was excused from the stability canary
+precisely because the dry run "regenerates" it.
+
+- **When a producer's population rule changes, list the artifacts it WRITES and diff them after the
+  first dry run**, not after the first apply.
+- **A worklist or record artifact is merged, never overwritten**: rows for the things planned this
+  run are replaced; every other committed row is carried verbatim; the run prints what the old rule
+  would have written (the two-step diff, baked in).
+- A canary excuse of the form *"the producer regenerates it"* is a claim that the producer's
+  population is stable. Re-read it whenever that population gains an arm.
+
+Origin: re-metal-fatigue §426.
+
+### An applier run for ONE target applies to all of them
+
+- **A generic applier invoked to create one type rebuilds its whole population.** Measured: the struct
+  applier that was the right producer for one new embedded class would also have re-created every embedded
+  element's vtable struct with a REPLACE conflict handler -- erasing slot definitions the previous round had
+  typed -- and re-applied a stale cell nobody had approved. Its dry run said so (`stale=[...]`). Give the
+  applier a narrowing argument that REFUSES an unknown target, rather than copying it for the one case.
+- **A comment's invariant rots on the path nothing runs.** "The plan tuple is identical either way" stayed
+  true until the tuple gained a type column; the create-new path that relied on it had not run since, and it
+  raised on first use after writing half its changes (recovered by closing without saving). When a record
+  gains a column, grep for the comments that promise equality over it.
+- **Moving a function between two CLASS namespaces re-spells every ledgered prototype.** The auto-`this`
+  follows the namespace, so a signature gate that tolerates `void` or the current class reads a class-to-class
+  move as a partial revert. Ledger the move as its own signature row.
+
+Origin: re-metal-fatigue §479.
+
+## CUT A WIDE WAVE FROM A CAUSE CENSUS — and read a dry-run guard refusal as a missing census rule
+
+**Origin: re-metal-fatigue §485 (2026-09-26).** Three good narrow rounds each aimed at one or two defects and paid the
+full per-version verification tail. The wider round started from ONE pass over the per-function score artifact: for
+every failing function, which defect causes fail it, and how many fail on exactly one (745 of 1,497). One read-only
+investigator per cause priced its lane by simulating the fix with the grader's own code; builders built the lanes in
+parallel, each followed by an adversarial verifier; all appliers went into ONE version bump. Measured: the lanes'
+flip lists were disjoint, and the whole-program gain beat the sum of the lanes' rehearsals by exactly the functions
+that needed two lanes' fixes at once -- gains a sequence of narrow rounds can only reach after all of them land.
+Four of five cause investigators refuted their own lane's premise, and two lanes converged independently on the same
+repair group, which is a strong selection signal.
+
+**A verifier per builder is not ceremony.** It found blocking defects in 4 of 5 builds, including this project's own
+applied names propagated into type component names (types carry no SourceType, so that launders them) and a selftest
+reported green that was red. Its brief must require re-verifying sampled rows from the DISASSEMBLY, mutating two
+guards on a copy, and checking the diff touches only the lane's files.
+
+**When an applier's guard refuses at the first dry run, ask whether the offline census could have seen it.** Two did
+here: a catalog rewrite that would have changed every line's terminator, and 47 planned data items whose bytes held
+auto-analysis strings. The second was visible in the exported strings index all along, so the right fix was a census
+rule (demonstrated by mutation) and a re-emitted plan -- never a hand-edited plan to get past the guard.
+
+## TYPING A RECEIVER CAN BREAK A CALL THROUGH IT — and ask which GATE owns an artifact before adding a row
+
+**Origin: re-metal-fatigue §486 (2026-09-27).** Replacing an opaque `base` byte array with the real base layout
+typed a member that a virtual call went through. While the member was an untyped offset, the call's float return
+bound; once the member was typed as a base-class pointer, the call's slot lay PAST that class's vtable and the
+decompiler lost the return (`extraout_ST0`, a trustworthy-C regression). No slot was retyped -- only the receiver.
+Any retype of a receiver can expose an out-of-range virtual call; rehearse with the artifact-variable grade on,
+and hold the class (with the reason recorded in the census) until the call has a call-site prototype override.
+
+**A file that looks like "where X lives" may be one phase's verified record.** Two new type sizes were appended to
+a leaf-type file because a size reader read it; every downstream check passed and the gate that owns the file
+refused 23 ways, because each of its rows must be witnessed in an evidence file that is never regenerated. The size
+already had a decided home elsewhere. Before writing a row, find the gate that verifies the file, not the reader
+that consumes it.
+
+## THE CASCADE CAN RUN AN ANALYZER THAT WRITES `USER_DEFINED` — the Variadic Function Signature Override analyzer
+
+**Measured (Ghidra 12.3, one MSVC/x86 game binary, 2026-09-27).** A signature apply changed one function's return
+type and the apply's own `analyzeChanges` re-analysed that function. The **Variadic Function Signature Override**
+analyzer — *enabled by default* — parsed the format strings of the function's 17 `printf` calls and wrote a call-site
+prototype override at each one, as **`SourceType.USER_DEFINED`**: the tier a human decision carries, and the one a
+`SourceType.AI`-filtered harvest treats as evidence. It recognised `printf` only because an earlier round of ours had
+NAMED the CRT function (tagged AI) — so our own label came back out of the cascade as a top-tier override. That is a
+laundering path the trust model's "tag your writes AI" rule does not close: the write is the analyzer's, not yours.
+
+It had never fired before on that project for a structural reason — it runs on functions the cascade re-analyses,
+and no earlier apply had re-typed a `printf` caller since the CRT names existed. So its absence across many rounds
+proved nothing.
+
+What caught it: a gate that checks **every** override label in the program against the apply ledger in BOTH
+directions and requires `SourceType.AI` (17 unledgered labels + their `override` namespace, not AI). A gate keyed
+only on the rows you wrote would have passed. What repaired it: a gated script that removes exactly the unledgered,
+non-AI override labels inside functions that call a variadic CRT function (refusing anything else), and turns the
+analyzer off (`currentProgram.getOptions("Analyzers").setBoolean("Variadic Function Signature Override", False)`)
+so the next cascade cannot write them again. The information is recoverable from the format strings at any time; the
+provenance is not.
+
+Before relying on "the cascade only propagates what I applied", list the enabled analyzers that WRITE on a
+function-changed event (`analysis_options` / `pyghidra.analysis_properties`) and ask which of them write a source tier
+above `ANALYSIS`.

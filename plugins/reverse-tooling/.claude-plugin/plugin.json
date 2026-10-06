@@ -1,0 +1,8 @@
+{
+  "name": "reverse-tooling",
+  "description": "Complementary artifact inspection with REA and persistent, evidence-driven Ghidra analysis.",
+  "author": {
+    "name": "unattachedgray"
+  },
+  "homepage": "https://github.com/morluto/rea"
+}

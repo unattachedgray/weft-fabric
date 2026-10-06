@@ -1,0 +1,45 @@
+#!/usr/bin/env python3
+"""Run the locally configured game-analysis toolchain with scoped environments."""
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+
+
+def main():
+    config_path = Path.home() / ".config/game-repair/toolchain.json"
+    try:
+        config = json.loads(config_path.read_text())
+    except (OSError, ValueError) as exc:
+        sys.exit(f"Game-analysis toolchain unavailable: {config_path}: {exc}")
+    tools = config["tools"]
+    if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):
+        print("game-re-tools doctor | " + " | ".join(sorted(tools)) + " [arguments]")
+        return
+    if sys.argv[1] == "doctor":
+        results = {}
+        for name, spec in tools.items():
+            env = os.environ.copy()
+            env.update(spec.get("env", {}))
+            try:
+                result = subprocess.run(spec["command"] + spec["probe"], env=env,
+                                        capture_output=True, text=True, timeout=30)
+                results[name] = {"ok": result.returncode == 0,
+                                 "exit_code": result.returncode,
+                                 "output": (result.stdout + result.stderr).strip()[:1000]}
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                results[name] = {"ok": False, "error": str(exc)}
+        print(json.dumps(results, indent=2))
+        sys.exit(0 if all(r["ok"] for r in results.values()) else 1)
+    name = sys.argv[1]
+    if name not in tools:
+        sys.exit(f"Unknown tool {name!r}; use game-re-tools --help")
+    spec = tools[name]
+    env = os.environ.copy()
+    env.update(spec.get("env", {}))
+    os.execvpe(spec["command"][0], spec["command"] + sys.argv[2:], env)
+
+
+if __name__ == "__main__":
+    main()

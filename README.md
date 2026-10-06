@@ -128,6 +128,8 @@ Plugins use commit-SHA versioning — every push to this repo bumps the version 
 | [`automation`](plugins/automation/) | 3 | Jira workflows, metric watchers/alerts, Zapier orchestration via MCP + webhooks. |
 | [`wordpress`](plugins/wordpress/) | 1 | Comprehensive WordPress development — block themes, custom blocks (apiVersion 3, Block Bindings, Pattern Overrides, Section Styles), plugins, REST API, Interactivity API, performance, security, a11y (WCAG 2.2 AA), wp.org compliance, wp-env + wp-scripts. |
 | [`skill-management`](plugins/skill-management/) | 3 | Discover, create, and propagate skills across your library. |
+| [`universal-modder`](plugins/universal-modder/) | 10 | Game recon, repair, modding, cross-game mechanic ports, asset pipelines and field notes. |
+| [`reverse-tooling`](plugins/reverse-tooling/) | 2 | REA artifact inspection and iterative Ghidra analysis; local native, .NET, IL2CPP and Java tool routing. |
 
 For the live skill-by-skill catalog, install `catalog@unatt` and read `/catalog:browse-skills` — it's regenerated on every push.
 
