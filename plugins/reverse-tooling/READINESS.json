@@ -1,0 +1,53 @@
+{
+  "date": "2026-10-06",
+  "controlled_fixture_only": true,
+  "game_tests_deferred": true,
+  "mcp": {
+    "ghidra-mcp": {
+      "initialized": true,
+      "tool_count": 212,
+      "server": {
+        "name": "ghidra_headless_mcp",
+        "version": "0.1.0"
+      },
+      "ping": {
+        "message": "pong",
+        "status": "ok"
+      },
+      "fixture_imported": true,
+      "decompiled_main": true,
+      "read_only_verified": true,
+      "function_count": 18,
+      "seconds": 9.28
+    },
+    "rea-mcp": {
+      "initialized": true,
+      "tool_count": 116,
+      "server": {
+        "name": "rea",
+        "version": "4.0.1"
+      },
+      "required_tools_present": true,
+      "seconds": 1.9
+    }
+  },
+  "executables": {
+    "ghidra-mcp": true,
+    "ghidra-cli": true,
+    "rea": true,
+    "rea-mcp": true,
+    "ilspycmd": true,
+    "cpp2il": true,
+    "um": true,
+    "vineflower": true,
+    "gdb": true,
+    "frida": true
+  },
+  "rea_ghidra_provider": true,
+  "ilspy_known_method_recovered": true,
+  "cpp2il_game_conversion_tested": false,
+  "universal_modder_helper_tests": {
+    "passed": 65,
+    "skipped": 1
+  }
+}
