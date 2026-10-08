@@ -73,7 +73,7 @@ For structural questions (where is X defined, who calls Y, what does a change to
 
 ## Vocabulary
 
-- **blog/docs** = unattached.me, in three kinds: **article** (`/doc/<slug>`, `unattached-article` skill), **blog post** (imported from the owner's Facebook), **news** (`/news`).
+- **blog/docs** = unattached.me, in three kinds: **article** (`/doc/<slug>`, `unattached-article` skill), **blog post** (imported from the owner's Facebook, or written in the owner-only `/write` editor, where either kind can be edited), **news** (`/news`).
 - **armed tab** = a live logged-in Firefox Developer Edition tab, driven by `firefox-control`. Never substitute a fresh browser. Keep research tabs in the background; never steal focus for a screenshot without an explicit request.
 - **check reddit** = `reddit-research` through Browser Tunnel's automatic research tabs. Direct unauthenticated routes (curl, `.json`, old.reddit, text proxies) return 403, and web search cannot crawl it.
 - **weft** = the harness at `~/dev/weft`. **dsh** = DeepSeek Harness at `~/AI/harnesses/deepseek-harness`, web UI `127.0.0.1:3080`.

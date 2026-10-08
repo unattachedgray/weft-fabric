@@ -2,12 +2,17 @@
 name: unattached-article
 description: Turn user-provided research, notes, DOCX files, or prior drafts into a newly written, visually rich long-form document for the unattached.me `/doc/` collection and a shorter copy-ready Facebook text derivative at finalization. Use when Codex must author, redesign, build, publish, or verify an Unattached issue with an original narrative, evidence-led opening statistics, chapter-specific licensed photography or charts, exact issue-frame parity, source preservation, repository-native validation, and social-post handoff.
 ---
-
 # Build an Unattached article
 
 Work in the site repository containing `web/fb/pages-src/` and
 `web/fb/tools/build-page.py`. Treat supplied research as evidence, not copy;
 treat current published sources as the design authority.
+
+This skill is for the `/doc/` issue format only. A short piece, a news brief,
+or an edit to an existing blog post does not need a built page: it goes through
+the owner-only `/write` editor (`web/fb/api/entries.php`; see `web/fb/CANVAS.md`,
+section 글쓰기). Choose `/doc/` when the piece needs the full issue frame:
+statistics band, chapters, references.
 
 ## Workflow
 
