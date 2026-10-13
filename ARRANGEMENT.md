@@ -91,6 +91,8 @@ tools/            symlinked into ~/.local/bin by agentsync
                   to / recall from the vault wiki with the same local-else-ssh rule
   wmachine        enrol a whole machine from the owner host
   wfleet          which machines are converged, and sync them
+  wremote         behind wagent mesh/run/update/vault-heal: ssh mesh, run
+                  anywhere, fleet updates, vault self-heal (FLEET.md)
   updateall       update every package manager present (apt/dnf/snap/flatpak/
                   npm/pipx/brew/fwupd); only firmware and release upgrades ask
 ```

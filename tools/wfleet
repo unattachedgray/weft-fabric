@@ -27,6 +27,7 @@ from pathlib import Path
 
 REGISTRY = Path.home() / ".config" / "agents" / "fleet.json"
 LEGACY_REGISTRY = Path.home() / ".config" / "weft" / "vault-machines.json"
+MESH = Path.home() / ".config" / "agents" / "mesh.json"
 REPO_DIR = "~/dev/weft-fabric"
 RELEASE = Path(__file__).resolve().parents[1] / "fabric-release.json"
 
@@ -67,6 +68,15 @@ def registry() -> dict[str, str]:
     # Fleet identity wins; legacy vault entries only fill migration gaps.
     data = _read_registry(LEGACY_REGISTRY)
     data.update(_read_registry(REGISTRY))
+    if not data:
+        # A leaf has no registry, but `wagent mesh` left it the member list and
+        # a Host entry for each member, so it can check the fleet itself.
+        try:
+            mesh = json.loads(MESH.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            mesh = {}
+        return {name: "local" if name == mesh.get("self") else name
+                for name in (mesh.get("members") or {})}
     return {name: meta.get("host", "") for name, meta in data.items()
             if isinstance(meta, dict) and isinstance(meta.get("host"), str)}
 

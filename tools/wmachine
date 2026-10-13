@@ -303,6 +303,9 @@ git -C {REPO_DIR} rev-parse --short HEAD
         register_machine(name, host, vault)
         record_enrollment(name, host, "verified", "complete")
         report(OK, "added to fleet inventory")
+        step(8, "join the ssh mesh (every member can reach every other)")
+        mesh = subprocess.run([str(Path(__file__).resolve().parent / "wremote"), "mesh"])
+        record_enrollment(name, host, "mesh", "complete" if mesh.returncode == 0 else "warning")
         report("note", f"protected credentials are never bulk-copied; add one by name with "
                        f"`wagent secrets provision {host} --keys NAME`")
     return rc

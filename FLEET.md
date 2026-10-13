@@ -234,12 +234,13 @@ Symlinked into `~/.local/bin` by `agentsync`.
 
 | Tool | Runs where | Does |
 |---|---|---|
-| `wagent` | any machine | the public Weft Fabric interface: setup, status, sync, enroll, check, discover, doctor |
+| `wagent` | any machine | the public Weft Fabric interface: setup, status, sync, enroll, check, discover, doctor, mesh, run, update, vault-heal |
+| `wremote` | any member | behind `wagent mesh / run / update / vault-heal` (see *Doing things remotely* below) |
 | `wsecret` | any machine | scoped secret registrar; hidden prompt, mode-0600 scope files, `wsecret run <scope> -- cmd` injects one scope into one child |
 | `wtask` | any machine | shared task list. Runs locally if the weft repo is present, else tunnels to the owner host over ssh |
 | `wnote`, `wrecall` | any machine | bank to / recall from the vault wiki. Symlinks to `wtask`, which dispatches on its invoked name: same local-else-ssh rule, stdin passes through. Leaf **writes** ride the SSH trust, not the leaf's read-only vault token (owner decision, 2026-09-17) |
 | `wmachine` | **owner host** | enrol / check / discover machines |
-| `wfleet` | **owner host** | `wfleet status` — who is converged; `wfleet sync` — converge everyone |
+| `wfleet` | owner host, or any mesh member | `wfleet status` — who is converged; `wfleet sync` — converge everyone. A leaf reads the member list from `~/.config/agents/mesh.json` |
 | `updateall` | any machine | one command to update every package manager present — apt, dnf, snap, flatpak, global npm, pipx, brew, fwupd, and a report of a newer distro release. Everything ordinary runs unattended, orphan removal and major npm bumps included. Only a firmware flash or a distro release upgrade is asked about, once, at the end, as a `[y/N]` (`y` or `yes` approve); no answer leaves it undone, and `-f` / `-r` pre-approve. Asks for the sudo password only when sudo needs one. `sudo updateall` needs a one-time `sudo ln -s ~/.local/bin/updateall /usr/local/bin/updateall` per machine, since sudo's `secure_path` excludes `~/.local/bin` |
 | `wvault` | any machine | vault client. **Not in this repo** — `wtoken install` ships it privately over ssh, and it carries the vault endpoint and auth header |
 | `wtoken` | **owner host only** | mints and revokes vault tokens. Deliberately not distributed |
@@ -256,6 +257,58 @@ member.
 Each enrollment keeps a mode-0600 progress journal under
 `~/.config/agents/enrollments/`. Re-running remains the recovery action; the
 journal makes a partial run say where it stopped.
+
+### Doing things remotely
+
+`wagent mesh` (owner host; also the last step of `wagent enroll`) lets every
+member ssh every other. It collects each member's tailnet IP, user,
+`~/.ssh/id_ed25519.pub` (created if absent) and **host key**, then writes on each:
+`~/.ssh/weft-mesh.conf` (pulled in by an `Include` at the top of `~/.ssh/config`),
+`~/.ssh/weft-mesh_known_hosts` (pinned host keys — no first-use prompt), one
+marker-delimited block in `authorized_keys`, and `~/.config/agents/mesh.json`.
+It finishes by opening a real session in every direction with strict host-key
+checking. Lines outside the managed block are never edited: a key that already
+has a hand-placed line keeps it, because such a line may carry a deliberate
+restriction — sd's default key on venge stays gated to `wnote/wrecall/wtask`
+(sd's unrestricted route is its own `venge-full` alias). Offline members keep
+their last-known entry.
+
+**Mesh is run once, never on a timer** (owner decision, 2026-10-13): a loop that
+rewrites `authorized_keys` is a standing risk, and a mesh that drifts later
+still works. Re-run `wagent mesh` by hand to refresh it.
+
+With the mesh in place, from **any** member:
+
+- `wagent run <all|a,b> -- CMD` — one argument is a shell string, several are argv.
+  Prints per-member output and exit codes; an offline member is reported as
+  offline (tailnet last-seen), not as a timeout.
+- `wagent update [who] [-n]` — `updateall -b` everywhere. A member whose sudo
+  wants a password gets a terminal window running `ssh -t <member> updateall`
+  when this machine has a display; nothing is ever forced. `-n` is a full dry run.
+- `wagent status` / `wagent sync` — fleet-wide from a leaf too.
+
+Remote agent dispatch (starting claude/codex tasks on another member) was
+built and deliberately withdrawn on 2026-10-13; it is not part of the fabric.
+
+### Vault tokens survive a sleeping leaf
+
+The owner's nightly `wtoken rotate-due` can only reach machines that are awake.
+Measured 2026-10-13: work slept Sep 25 – Oct 13, every nightly rotation logged
+"deferred" into the owner's journal only, the token expired and was
+garbage-collected, and every agent on work lost the vault without a word. Now the
+leaf's hourly `wagent sync --local` ends with `wagent vault-heal`: if `wvault`
+reports **HTTP 401/403** (not merely "unreachable" — both exit 1, so the text is
+the sensor) it asks the owner to run `wtoken enroll <name> <self>`, at most once
+per 6 hours. The token name comes from `mesh.json`.
+
+### ssh inside the Codex sandbox
+
+Codex's workspace-write sandbox shows `/etc/ssh/ssh_config.d/*` with a foreign
+owner, and ssh refuses to start ("Bad owner or permissions"). `wtask`/`wnote`/
+`wrecall` and `wremote` retry with `-F ~/.ssh/config` on exactly that error. The
+sandbox also has no network (`socket: Operation not permitted`), and enabling it
+was declined (owner decision, 2026-10-13), so from inside Codex these tools still
+cannot reach another machine — the fallback only removes the misleading error.
 
 ### Credentials after enrollment
 
