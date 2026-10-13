@@ -1,0 +1,513 @@
+#!/usr/bin/env python3
+"""wremote — do things on fleet machines from any fleet machine.
+
+  wagent mesh [--check]                  make every member able to ssh every other
+  wagent run <targets> [opts] -- CMD     run a command on one, several, or all machines
+  wagent update [targets] [-n]           run updateall everywhere; password steps open a window
+  wagent vault-heal                      re-enrol this leaf's vault token if it was rejected
+
+Targets are `all` (the default for update) or a comma list of member
+names. Members come from the owner host's fleet registry
+(~/.config/agents/fleet.json) plus the owner itself; on a leaf, from the
+~/.config/agents/mesh.json that `wagent mesh` leaves on every member.
+
+THE MESH. `wagent mesh` runs from the owner host. It collects each member's
+tailnet IP, login user, ~/.ssh/id_ed25519.pub (created if absent) and SSH host
+key over the trust that enrollment already established, then writes to every
+member:
+  ~/.ssh/weft-mesh.conf            Host <member> entries, pulled in by an Include
+                                   line at the top of ~/.ssh/config
+  ~/.ssh/weft-mesh_known_hosts     the members' host keys, pinned — no
+                                   trust-on-first-use prompt, ever
+  ~/.ssh/authorized_keys           one marker-delimited block with the other
+                                   members' keys
+  ~/.config/agents/mesh.json       the member list, so leaves can drive the fleet
+Lines outside the managed block are never touched. A key that already has a
+hand-placed line is left to that line, because a hand-placed line may carry a
+deliberate restriction (venge gates sd's default key to wnote/wrecall/wtask);
+mesh reports it instead of overriding it. A member that is offline keeps its
+last-known entry, so one sleeping laptop does not drop out of everyone's config.
+Mesh is deliberately run once — at setup and by each enrollment — never on a
+timer: an automated loop that rewrites authorized_keys is a standing risk, and a
+mesh that drifts later still works. Re-run `wagent mesh` by hand to refresh it.
+
+Root is never forced. `wagent update` runs `updateall -b`; a machine whose sudo
+wants a password gets a real terminal window running `ssh -t <host> updateall`
+when this machine has a display, and a plain report otherwise.
+"""
+from __future__ import annotations
+
+import argparse
+import concurrent.futures as cf
+import json
+import os
+from pathlib import Path
+import re
+import shlex
+import shutil
+import subprocess
+import sys
+import time
+
+HOME = Path.home()
+FLEET = HOME / ".config" / "agents" / "fleet.json"
+MESH = HOME / ".config" / "agents" / "mesh.json"
+MESH_STATE = HOME / ".config" / "agents" / "mesh-state.json"
+NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+SSH_OPTS = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10"]
+PATH_PREFIX = 'export PATH="$HOME/.local/bin:$HOME/bin:/usr/local/bin:/usr/local/sbin:/snap/bin:$PATH"; '
+BEGIN = "# >>> weft-mesh (managed by `wagent mesh`; edit the fleet registry, not this block)"
+END = "# <<< weft-mesh"
+INCLUDE = "Include ~/.ssh/weft-mesh.conf"
+SANDBOX_SSH = "Bad owner or permissions on /etc/ssh/"
+USER_CONFIG = HOME / ".ssh" / "config"
+VAULT_TOKEN = HOME / ".config" / "weft" / "vault-token"
+HEAL_STAMP = HOME / ".local" / "state" / "weft-fabric" / "vault-heal-attempt"
+HEAL_EVERY = 6 * 3600
+
+
+# ---------------------------------------------------------------- membership
+
+def owner_name() -> str:
+    env = os.environ.get("WEFT_OWNER_HOST", "").strip()
+    if env:
+        return env
+    try:
+        value = (HOME / ".config" / "agents" / "owner-host").read_text(encoding="utf-8").strip()
+        if value:
+            return value
+    except OSError:
+        pass
+    return "venge"
+
+
+def read_json(path: Path) -> dict:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def vault_names() -> dict[str, str]:
+    """Member (ssh alias) -> its vault token name, from the owner's registry."""
+    out = {}
+    for machine_id, meta in (read_json(FLEET).get("machines") or {}).items():
+        if isinstance(meta, dict) and meta.get("vault") == "enrolled" and isinstance(meta.get("host"), str):
+            out[meta["host"]] = machine_id
+    return out
+
+
+def members() -> dict[str, str]:
+    """Member name -> how to reach it from here ("local" or an ssh alias)."""
+    fleet = read_json(FLEET)
+    if fleet:
+        out = {owner_name(): "local"}
+        for meta in (fleet.get("machines") or {}).values():
+            host = meta.get("host") if isinstance(meta, dict) else None
+            if isinstance(host, str) and NAME_RE.fullmatch(host):
+                out.setdefault(host, host)
+        return out
+    mesh = read_json(MESH)
+    me = mesh.get("self")
+    return {name: ("local" if name == me else name)
+            for name in (mesh.get("members") or {}) if NAME_RE.fullmatch(name)}
+
+
+def resolve(spec: str | None) -> dict[str, str]:
+    known = members()
+    if not known:
+        sys.exit("wremote: no fleet here — no ~/.config/agents/fleet.json and no mesh.json; "
+                 "run `wagent mesh` on the owner host")
+    if spec in (None, "", "all"):
+        return known
+    picked = {}
+    for name in spec.split(","):
+        name = name.strip()
+        if name not in known:
+            sys.exit(f"wremote: unknown member {name!r}; members: {', '.join(sorted(known))}")
+        picked[name] = known[name]
+    return picked
+
+
+# ---------------------------------------------------------------- execution
+
+def execute(host: str, script: str, stdin: str | None = None, timeout: int = 600,
+            tty: bool = False) -> subprocess.CompletedProcess:
+    """Run a shell script on a member. Script text is a single argument, never re-split."""
+    if host == "local":
+        cmd = ["bash", "-c", script]
+    else:
+        cmd = ["ssh", *SSH_OPTS, *(["-t"] if tty else []), host, "bash -c " + shlex.quote(script)]
+    try:
+        r = subprocess.run(cmd, input=stdin, capture_output=True, text=True, timeout=timeout)
+        if r.returncode == 255 and SANDBOX_SSH in r.stderr and USER_CONFIG.is_file():
+            # Codex's sandbox maps /etc/ssh/ssh_config.d/* to a foreign owner and ssh
+            # refuses the whole run. -F reads only the user config, which is all the
+            # fleet needs (measured 2026-10-13 in a codex workspace-write session).
+            cmd[1:1] = ["-F", str(USER_CONFIG)]
+            r = subprocess.run(cmd, input=stdin, capture_output=True, text=True, timeout=timeout)
+        return r
+    except subprocess.TimeoutExpired as e:
+        return subprocess.CompletedProcess(cmd, 124, e.stdout or "", f"timed out after {timeout}s")
+
+
+def tailscale_peers() -> dict[str, dict]:
+    """Tailnet IP -> peer status, for telling 'offline' apart from 'broken'."""
+    exe = shutil.which("tailscale")
+    if not exe:
+        return {}
+    try:
+        r = subprocess.run([exe, "status", "--json"], capture_output=True, text=True, timeout=10)
+        data = json.loads(r.stdout)
+    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError):
+        return {}
+    out = {}
+    for peer in (data.get("Peer") or {}).values():
+        for ip in peer.get("TailscaleIPs") or []:
+            out[ip] = peer
+    return out
+
+
+def why_unreachable(name: str) -> str:
+    ip = (read_json(MESH).get("members") or read_json(MESH_STATE)).get(name, {}).get("ip")
+    peer = tailscale_peers().get(ip or "")
+    if peer and not peer.get("Online", True):
+        return f"offline (tailnet last seen {str(peer.get('LastSeen', '?'))[:10]})"
+    return "unreachable over ssh"
+
+
+def fan_out(targets: dict[str, str], script: str, timeout: int) -> dict[str, dict]:
+    def one(item):
+        name, host = item
+        start = time.monotonic()
+        r = execute(host, script, timeout=timeout)
+        res = {"exit": r.returncode, "stdout": r.stdout, "stderr": r.stderr,
+               "seconds": round(time.monotonic() - start, 1)}
+        if r.returncode == 255 and host != "local":
+            res["unreachable"] = why_unreachable(name)
+        return name, res
+    with cf.ThreadPoolExecutor(max_workers=8) as pool:
+        return dict(pool.map(one, sorted(targets.items())))
+
+
+def print_results(results: dict[str, dict]) -> int:
+    rc = 0
+    for name, r in results.items():
+        status = r.get("unreachable") or f"exit {r['exit']}"
+        print(f"── {name}  ({status}, {r['seconds']}s)")
+        for stream in ("stdout", "stderr"):
+            text = r[stream].rstrip()
+            if text and not r.get("unreachable"):
+                print(text)
+        rc |= 0 if r["exit"] == 0 else 1
+    ok = sum(1 for r in results.values() if r["exit"] == 0)
+    print(f"\n{ok}/{len(results)} succeeded")
+    return rc
+
+
+# ---------------------------------------------------------------- mesh
+
+COLLECT = r"""
+set -u
+k="$HOME/.ssh/id_ed25519"
+mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"
+created=0
+if [ ! -f "$k.pub" ]; then
+  [ -f "$k" ] && { echo '{"error":"private key without .pub"}'; exit 0; }
+  ssh-keygen -q -t ed25519 -N "" -C "weft-mesh@$(hostname)" -f "$k" && created=1
+fi
+ip=$(tailscale ip -4 2>/dev/null | head -1)
+hk=$(cat /etc/ssh/ssh_host_ed25519_key.pub 2>/dev/null | awk '{print $1" "$2}')
+python3 - "$ip" "$hk" "$created" <<'PY'
+import json, os, socket, sys, getpass
+pub = open(os.path.expanduser("~/.ssh/id_ed25519.pub")).read().split()
+print(json.dumps({"hostname": socket.gethostname(), "user": getpass.getuser(), "ip": sys.argv[1],
+                  "host_key": sys.argv[2], "pubkey": pub[0] + " " + pub[1],
+                  "created_key": sys.argv[3] == "1"}))
+PY
+"""
+
+# Applied on each member with its payload. Pure stdlib; idempotent.
+APPLY = r"""
+import json, os, sys, tempfile
+p = json.loads(sys.argv[1])
+home = os.path.expanduser("~")
+ssh = os.path.join(home, ".ssh")
+os.makedirs(ssh, mode=0o700, exist_ok=True)
+changed, notes = [], []
+
+def read(path):
+    try:
+        with open(path) as f: return f.read()
+    except FileNotFoundError: return None
+
+def write(path, text, mode=0o600):
+    if read(path) == text: return False
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path))
+    with os.fdopen(fd, "w") as f: f.write(text)
+    os.chmod(tmp, mode); os.replace(tmp, path)
+    changed.append(path.replace(home, "~")); return True
+
+write(os.path.join(ssh, "weft-mesh.conf"), p["conf"])
+write(os.path.join(ssh, "weft-mesh_known_hosts"), p["known_hosts"])
+
+cfg = os.path.join(ssh, "config")
+text = read(cfg) or ""
+if p["include"] not in text.splitlines():
+    write(cfg, "# weft-mesh: managed Host entries; must stay above every Host block\n"
+               + p["include"] + "\n\n" + text)
+
+ak = os.path.join(ssh, "authorized_keys")
+lines = (read(ak) or "").splitlines()
+outside, inside = [], False
+for line in lines:
+    if line == p["begin"]: inside = True; continue
+    if line == p["end"]: inside = False; continue
+    if not inside: outside.append(line)
+present = {tok for line in outside for tok in line.split() if tok.startswith("AAAA")}
+block = []
+for name, key in sorted(p["keys"].items()):
+    if key.split()[1] in present:
+        notes.append(f"{name}: key already has its own line here (kept as is)")
+    else:
+        block.append(f"{key} weft-mesh:{name}")
+while outside and outside[-1] == "": outside.pop()
+new = "\n".join(outside + ([""] if outside else []) + [p["begin"], *block, p["end"]]) + "\n"
+write(ak, new)
+
+agents = os.path.join(home, ".config", "agents")
+os.makedirs(agents, exist_ok=True)
+write(os.path.join(agents, "mesh.json"), json.dumps(p["mesh"], indent=2, sort_keys=True) + "\n", 0o644)
+print(json.dumps({"changed": changed, "notes": notes}))
+"""
+
+
+def render_conf(me: str, state: dict) -> str:
+    out = ["# Managed by `wagent mesh` — regenerated on every run. Edit the fleet registry, not this file.", ""]
+    for name, m in sorted(state.items()):
+        if name == me or not m.get("ip"):
+            continue
+        out += [f"Host {name}", f"    HostName {m['ip']}", f"    User {m['user']}",
+                "    IdentityFile ~/.ssh/id_ed25519",
+                "    UserKnownHostsFile ~/.ssh/known_hosts ~/.ssh/weft-mesh_known_hosts",
+                "    ServerAliveInterval 30", "    ServerAliveCountMax 4", ""]
+    return "\n".join(out)
+
+
+def render_known_hosts(me: str, state: dict) -> str:
+    return "".join(f"{name},{m['ip']} {m['host_key']}\n" for name, m in sorted(state.items())
+                   if name != me and m.get("ip") and m.get("host_key"))
+
+
+def payload_for(me: str, state: dict) -> dict:
+    return {"conf": render_conf(me, state), "known_hosts": render_known_hosts(me, state),
+            "include": INCLUDE, "begin": BEGIN, "end": END,
+            "keys": {n: m["pubkey"] for n, m in state.items() if n != me and m.get("pubkey")},
+            "mesh": {"version": 1, "self": me, "owner": owner_name(),
+                     "members": {n: {"ip": m.get("ip", ""), "user": m.get("user", ""),
+                                     "vault": vault_names().get(n, "")}
+                                 for n, m in sorted(state.items())}}}
+
+
+def cmd_mesh(check: bool) -> int:
+    if not FLEET.is_file():
+        print("wagent mesh runs on the owner host (it needs the fleet registry); "
+              f"from here: ssh {owner_name()} wagent mesh", file=sys.stderr)
+        return 2
+    targets = members()
+    state = read_json(MESH_STATE)
+    print(f"collecting from {len(targets)} member(s)…")
+    collected = fan_out(targets, PATH_PREFIX + COLLECT, timeout=60)
+    reachable = {}
+    for name, r in collected.items():
+        try:
+            info = json.loads(r["stdout"].strip().splitlines()[-1]) if r["exit"] == 0 else None
+        except (json.JSONDecodeError, IndexError):
+            info = None
+        if not info or info.get("error") or not info.get("ip"):
+            why = r.get("unreachable") or (info or {}).get("error") or "no tailnet IP / bad reply"
+            kept = " — keeping last-known entry" if name in state else " — not yet in the mesh"
+            print(f"  {name:<12} {why}{kept}")
+            continue
+        info["seen"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+        state[name] = info
+        reachable[name] = targets[name]
+        made = "  (created its key)" if info.get("created_key") else ""
+        print(f"  {name:<12} {info['ip']:<16} {info['user']}@{info['hostname']}{made}")
+    for gone in set(state) - set(targets):
+        print(f"  {gone:<12} no longer in the registry — dropping from the mesh")
+        del state[gone]
+    if check:
+        print("\n--check: nothing written")
+        return 0
+    MESH_STATE.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    print("\napplying…")
+    rc = 0
+    for name, host in sorted(reachable.items()):
+        script = "python3 -c " + shlex.quote(APPLY) + " " + shlex.quote(json.dumps(payload_for(name, state)))
+        r = execute(host, script, timeout=60)
+        try:
+            res = json.loads(r.stdout.strip().splitlines()[-1])
+        except (json.JSONDecodeError, IndexError):
+            print(f"  {name:<12} FAILED: {(r.stderr or r.stdout).strip()[:200]}")
+            rc = 1
+            continue
+        print(f"  {name:<12} {', '.join(res['changed']) or 'already current'}")
+        for note in res["notes"]:
+            print(f"  {'':<12} note: {note}")
+    if rc == 0:
+        rc = verify_mesh(reachable)
+    return rc
+
+
+def verify_mesh(reachable: dict[str, str]) -> int:
+    """Every reachable member opens a real session to every other one."""
+    names = sorted(reachable)
+    probe = "; ".join(
+        f"printf '%s ' {n}; ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes "
+        f"{n} 'echo ok' 2>&1 | tail -1" for n in names)
+    print("\nverifying every direction (strict host keys)…")
+    results = fan_out(reachable, probe, timeout=120)
+    bad = 0
+    for src, r in results.items():
+        for line in r["stdout"].splitlines():
+            dst, _, out = line.partition(" ")
+            if dst == src:
+                continue
+            ok = out.strip() == "ok"
+            # A forced-command gate answering is a working connection that a
+            # hand-placed line deliberately restricts; mesh never overrides those.
+            gated = not ok and "weft-remote-gate" in out
+            bad += not (ok or gated)
+            verdict = "ok" if ok else "gated by a hand-placed restriction (kept)" if gated else out.strip()[:90]
+            print(f"  {src:>10} → {dst:<10} {verdict}")
+    print("mesh verified" if not bad else f"{bad} direction(s) failed")
+    return 1 if bad else 0
+
+
+# ---------------------------------------------------------------- run / update
+
+def cmd_run(spec: str, command: list[str], timeout: int, as_json: bool) -> int:
+    if not command:
+        sys.exit("wremote: nothing to run — put the command after `--`")
+    # One argument is a shell string ("df -h | tail -1"); several are argv, quoted as given.
+    text = command[0] if len(command) == 1 else " ".join(shlex.quote(c) for c in command)
+    results = fan_out(resolve(spec), PATH_PREFIX + text, timeout)
+    if as_json:
+        print(json.dumps(results, indent=2))
+        return 0 if all(r["exit"] == 0 for r in results.values()) else 1
+    return print_results(results)
+
+
+TERMINALS = [("konsole", ["konsole", "-e"]), ("ptyxis", ["ptyxis", "--"]),
+             ("gnome-terminal", ["gnome-terminal", "--"]), ("x-terminal-emulator", ["x-terminal-emulator", "-e"]),
+             ("xterm", ["xterm", "-e"])]
+
+
+def open_window(title: str, shell: str) -> bool:
+    if not (os.environ.get("WAYLAND_DISPLAY") or os.environ.get("DISPLAY")):
+        return False
+    for exe, prefix in TERMINALS:
+        if shutil.which(exe):
+            body = f"printf '\\033]0;{title}\\007'; {shell}; echo; read -rp 'done — press Enter to close' _"
+            subprocess.Popen([*prefix, "bash", "-c", body], start_new_session=True,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return True
+    return False
+
+
+def cmd_update(spec: str | None, dry: bool) -> int:
+    targets = resolve(spec)
+    results = fan_out(targets, PATH_PREFIX + ("updateall -n -q" if dry else "updateall -b -q"), timeout=3600)
+    rc = print_results(results)
+    if dry:
+        return rc
+    for name, r in results.items():
+        if "sudo needs a password" not in (r["stdout"] + r["stderr"]):
+            continue
+        host = targets[name]
+        line = "updateall" if host == "local" else f"ssh -t {shlex.quote(host)} " + shlex.quote(PATH_PREFIX + "updateall")
+        if open_window(f"updateall on {name}", line):
+            print(f"{name}: sudo wants a password — opened a terminal window running updateall there")
+        else:
+            print(f"{name}: sudo wants a password and this machine has no display; run: {line}")
+    return rc
+
+
+# ---------------------------------------------------------------- vault self-heal
+
+def cmd_vault_heal(quiet: bool) -> int:
+    """A leaf that slept through its token's rotation asks the owner to re-enrol it.
+
+    The owner's nightly `wtoken rotate-due` can only reach machines that are
+    awake. Measured 2026-10-13: work slept Sep 25 – Oct 13, every nightly
+    rotation logged "deferred" into venge's journal only, the token expired and
+    was garbage-collected, and every agent on work lost the vault silently. The
+    leaf is the one party that knows when it is awake, so it closes the loop.
+    """
+    def say(msg: str) -> None:
+        if not quiet:
+            print(msg)
+    wvault = shutil.which("wvault") or str(HOME / ".local" / "bin" / "wvault")
+    if not VAULT_TOKEN.is_file() or not Path(wvault).is_file():
+        say("vault: not enrolled here")
+        return 0
+    r = subprocess.run([wvault, "workspaces"], capture_output=True, text=True, timeout=60)
+    # Exit 1 means both "rejected" and "unreachable"; only the former is ours to fix.
+    if r.returncode == 0:
+        say("vault: token accepted")
+        return 0
+    if not re.search(r"HTTP 40[13]\b", r.stderr):
+        say(f"vault: {r.stderr.strip() or 'check failed'} — not a token problem, leaving it")
+        return 0
+    mesh = read_json(MESH)
+    me, owner = mesh.get("self"), mesh.get("owner") or owner_name()
+    name = (mesh.get("members") or {}).get(me or "", {}).get("vault")
+    if not (me and name and NAME_RE.fullmatch(me) and NAME_RE.fullmatch(name)):
+        print("vault: token rejected, and this machine has no mesh identity to ask the owner with; "
+              f"on {owner}: wtoken enroll <name> <this-host>", file=sys.stderr)
+        return 1
+    try:
+        if time.time() - HEAL_STAMP.stat().st_mtime < HEAL_EVERY:
+            say("vault: token rejected; re-enrolment already requested recently")
+            return 1
+    except OSError:
+        pass
+    HEAL_STAMP.parent.mkdir(parents=True, exist_ok=True)
+    HEAL_STAMP.touch()
+    print(f"vault: token rejected — asking {owner} to re-enrol {name}")
+    r = execute(owner, f"~/dev/weft/scripts/weft/wtoken enroll {name} {me}", timeout=180)
+    print((r.stdout + r.stderr).strip()[-600:])
+    return r.returncode
+
+
+# ---------------------------------------------------------------- cli
+
+def main(argv: list[str]) -> int:
+    rest: list[str] = []
+    if "--" in argv:
+        i = argv.index("--")
+        argv, rest = argv[:i], argv[i + 1:]
+    ap = argparse.ArgumentParser(prog="wagent", description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest="action", required=True)
+    m = sub.add_parser("mesh"); m.add_argument("--check", action="store_true")
+    r = sub.add_parser("run"); r.add_argument("targets")
+    r.add_argument("--timeout", type=int, default=600); r.add_argument("--json", action="store_true")
+    u = sub.add_parser("update"); u.add_argument("targets", nargs="?"); u.add_argument("-n", "--dry-run", action="store_true")
+    v = sub.add_parser("vault-heal"); v.add_argument("--quiet", action="store_true")
+    a = ap.parse_args(argv)
+    if a.action == "vault-heal":
+        return cmd_vault_heal(a.quiet)
+    if a.action == "mesh":
+        return cmd_mesh(a.check)
+    if a.action == "run":
+        return cmd_run(a.targets, rest, a.timeout, a.json)
+    if a.action == "update":
+        return cmd_update(a.targets, a.dry_run)
+    return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

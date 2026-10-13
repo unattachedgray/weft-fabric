@@ -71,9 +71,15 @@ def main(argv: list[str]) -> int:
     # Quote each argument for the remote shell; never interpolate raw.
     from shlex import quote
     remote_cmd = " ".join([REMOTE, *(quote(a) for a in argv)])
-    result = subprocess.run(
-        ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", host, remote_cmd]
-    )
+    cmd = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", host, remote_cmd]
+    # Codex's sandbox shows /etc/ssh/ssh_config.d/* with a foreign owner and ssh
+    # refuses to start at all (measured 2026-10-13). Probe once with stdin closed;
+    # only that exact refusal switches to the user config alone.
+    user_config = Path.home() / ".ssh" / "config"
+    probe = subprocess.run([*cmd[:-2], "-G", host], capture_output=True, text=True)
+    if "Bad owner or permissions on /etc/ssh/" in probe.stderr and user_config.is_file():
+        cmd[1:1] = ["-F", str(user_config)]
+    result = subprocess.run(cmd)
     if result.returncode == 255:
         print(f"{NAME}: could not reach owner host '{host}'. Its state lives "
               f"there; set $WEFT_OWNER_HOST or ~/.config/agents/owner-host if that is wrong.",

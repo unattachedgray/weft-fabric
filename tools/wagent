@@ -11,6 +11,11 @@
   wagent doctor [--json]       inspect this machine's live wiring
   wagent version [--json]      product version, protocol, and exact build
 
+  wagent mesh [--check]        let every member ssh every other (owner host)
+  wagent run <who> -- CMD      run a command on members (`all` or a,b,c)
+  wagent update [who] [-n]     updateall everywhere; password steps get a window
+  wagent vault-heal            re-enrol this leaf's vault token if it was rejected
+
 Legacy agentsync/wfleet/wmachine commands remain compatibility aliases.
 """
 from __future__ import annotations
@@ -27,6 +32,8 @@ WFLEET = ROOT / "tools" / "wfleet"
 WMACHINE = ROOT / "tools" / "wmachine"
 WSECRET = ROOT / "tools" / "wsecret"
 WSETUP = ROOT / "tools" / "wsetup"
+WREMOTE = ROOT / "tools" / "wremote"
+MESH = Path.home() / ".config" / "agents" / "mesh.json"
 FLEET = Path.home() / ".config" / "agents" / "fleet.json"
 LEGACY_FLEET = Path.home() / ".config" / "weft" / "vault-machines.json"
 RELEASE = ROOT / "fabric-release.json"
@@ -37,7 +44,8 @@ def run(command: list[str]) -> int:
 
 
 def has_fleet() -> bool:
-    return FLEET.is_file() or LEGACY_FLEET.is_file()
+    # A leaf joined by `wagent mesh` can see and drive the fleet too.
+    return FLEET.is_file() or LEGACY_FLEET.is_file() or MESH.is_file()
 
 
 def doctor(args: list[str]) -> int:
@@ -90,9 +98,17 @@ def main() -> int:
     if action == "sync":
         local = "--local" in args or not has_fleet()
         forwarded = [a for a in args if a != "--local"]
-        return run([str(AGENTSYNC), *forwarded]) if local else run([str(WFLEET), "sync", *forwarded])
+        if not local:
+            return run([str(WFLEET), "sync", *forwarded])
+        rc = run([str(AGENTSYNC), *forwarded])
+        # The hourly timer runs this on every member, so a leaf that slept through
+        # its vault rotation repairs itself on the first sync after it wakes.
+        run([str(WREMOTE), "vault-heal", "--quiet"])
+        return rc
     if action in ("enroll", "check", "discover"):
         return run([str(WMACHINE), action, *args])
+    if action in ("mesh", "run", "update", "vault-heal"):
+        return run([str(WREMOTE), action, *args])
     if action == "secrets":
         return run([str(WSECRET), *args])
     if action == "setup":
