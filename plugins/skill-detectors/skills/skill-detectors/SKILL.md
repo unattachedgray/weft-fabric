@@ -78,7 +78,7 @@ skill-detectors/
 ├── run-all.sh                    # SessionStart entry point
 ├── run-prompt-detectors.sh       # UserPromptSubmit entry point
 ├── detectors/                    # disk-state detectors (one *.sh each)
-│   ├── graphify.sh               # offers /graphify when repo has no graphify-out/
+│   ├── code-graph.sh             # one code graph per project: follows a choice, else offers Graphify (mixed) or codebase-memory (pure code)
 │   ├── pretext.sh                # constrains text-measurement to pretext APIs
 │   └── ast-grep.sh               # routes structural queries to ast-grep
 └── prompt-detectors/             # chat-content detectors
