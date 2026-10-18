@@ -143,6 +143,26 @@ local verification, or reproducible measurements. Keep Reddit claims labeled as
 practitioner reports, verify locally when possible, and state when the required
 armed browser path is unavailable or the search finds no relevant evidence.
 
+## Code Graphs: One Per Project, Chosen By What The Project Is
+
+For structural questions (where is X defined, who calls Y, what does a change
+touch) query a code graph before grepping, when the project has one. Use **one**
+graph per project, not two in the live loop: both index on change, and two
+overlapping structural sources cost CPU and tokens and split the agent's
+attention.
+
+- **codebase-memory MCP** (`codebase-memory-mcp`) for a code-centred project
+  worked through an MCP-capable CLI: index once, query on demand, re-index
+  after large changes. Check the project list before indexing again.
+- **Graphify** for a project whose meaning lives mostly outside code (docs,
+  specs, PDFs, schemas), or for a CLI without MCP. It costs real tokens per
+  run, so generate on demand, not every session.
+- A hybrid only as: codebase-memory in the live loop, Graphify as an occasional
+  export for onboarding or architecture views.
+
+Record the choice and its reason in the project's own AGENTS.md or CLAUDE.md.
+Which of the two is installed is a machine fact; see MACHINE.md.
+
 ## Shared Skill Library
 
 Skills live in ONE place — `/home/julian/dev/weft-fabric` — and every CLI
