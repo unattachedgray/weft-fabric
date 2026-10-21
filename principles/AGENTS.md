@@ -160,6 +160,15 @@ attention.
 - A hybrid only as: codebase-memory in the live loop, Graphify as an occasional
   export for onboarding or architecture views.
 
+**Before starting major work, make the graph match the tree you will work in.**
+Major work is a merge, a migration, a refactor, or anything spanning many files.
+Check the project list for an index of *that* tree: a new worktree, an upstream
+merge, or a branch far from the indexed commit is a different tree, so index it
+first. A project with no graph gets the right one before the work starts, not
+halfway through. Measured on 2026-10-21: a 42,613-commit upstream merge ran on
+grep for hours because the only index described the pre-merge tree; the merged
+worktree indexed in one call.
+
 Record the choice and its reason in the project's own AGENTS.md or CLAUDE.md.
 Which of the two is installed is a machine fact; see MACHINE.md.
 
