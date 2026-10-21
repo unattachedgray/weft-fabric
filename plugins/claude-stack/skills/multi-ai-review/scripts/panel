@@ -33,7 +33,8 @@ cmd_run() {
   # review, normalise to one JSON array, surface disagreement.
   #
   #   usage: panel.sh <prompt-file> [outdir]
-  #   env:   PANEL_TIMEOUT (default 300), PANEL_MEMBERS (default "codex agy cursor")
+  #   env:   PANEL_TIMEOUT (default 300), PANEL_MEMBERS (default "codex grok")
+  #   (2026-10-22: owner took Antigravity out; Cursor is barred since 2026-09-20.)
   #
   # Verified 2026-08-08 on: claude 2.1.226, codex-cli 0.147.0, agy 1.1.11,
   # cursor-agent 2026.08.04. Every flag below was arrived at by hitting the failure.
@@ -41,7 +42,7 @@ cmd_run() {
   PROMPT_FILE="${1:?usage: panel.sh <prompt-file> [outdir]}"
   OUT="${2:-$(mktemp -d -t panel-XXXX)}"; mkdir -p "$OUT"
   TIMEOUT="${PANEL_TIMEOUT:-300}"
-  MEMBERS="${PANEL_MEMBERS:-codex agy cursor}"
+  MEMBERS="${PANEL_MEMBERS:-codex grok}"
 
   # MODEL SELECTION. Each CLI defaults to its own house architecture — codex to
   # OpenAI, agy to Gemini, cursor to Composer — so the default panel already gives
@@ -91,6 +92,13 @@ cmd_run() {
                 ${PANEL_AGY_MODEL:+--model "$PANEL_AGY_MODEL"} \
                 --json-schema "$SCHEMA" -p "$PROMPT" ;;
       # GOTCHA: hard-fails ("Workspace Trust Required") in any untrusted dir without --trust.
+      # GOTCHA (2026-10-22): grok's --permission-mode plan does NOT block writes — a probe
+      # created a file. Read-only comes from bubblewrap: the whole filesystem mounted
+      # read-only except grok's own state dir and a private /tmp. Verified: reads work,
+      # every write (editor and shell, even with --always-approve) fails "Read-only".
+      grok)   timeout "$TIMEOUT" bwrap --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp \
+                --bind "$HOME/.grok" "$HOME/.grok" --chdir "$PWD" \
+                grok -p "$PROMPT" --output-format json ;;
       cursor) timeout "$TIMEOUT" cursor-agent -p --trust --mode ask --output-format json \
                 ${PANEL_CURSOR_MODEL:+--model "$PANEL_CURSOR_MODEL"} \
                 "$PROMPT" ;;
@@ -99,6 +107,7 @@ cmd_run() {
 
     case "$name" in
       claude|cursor) jq -r '.result   // empty' <"$OUT/$name.raw" >"$OUT/$name.txt" 2>/dev/null ;;
+      grok)          jq -r '.text     // empty' <"$OUT/$name.raw" >"$OUT/$name.txt" 2>/dev/null ;;
       agy)           jq -rs 'map(select(.event=="result"))|last.result.response // empty' \
                         <"$OUT/$name.raw" >"$OUT/$name.txt" 2>/dev/null ;;
       codex)         : ;;  # already written via -o
@@ -158,7 +167,7 @@ cmd_run() {
        --arg model "$(case $m in
           agy)    echo "${PANEL_AGY_MODEL:-default(gemini)}" ;;
           cursor) echo "${PANEL_CURSOR_MODEL:-default(composer)}" ;;
-          codex)  echo "default(openai)" ;; *) echo default ;; esac)" \
+          codex)  echo "default(openai)" ;; grok) echo "default(xai)" ;; *) echo default ;; esac)" \
        --arg target "$TARGET" --arg base "$BASE_SHA" \
        '{run:$run, ts:(now|todate), kind:$kind, member:$m, model:$model, outdir:$out,
          target:$target, base_sha:$base,

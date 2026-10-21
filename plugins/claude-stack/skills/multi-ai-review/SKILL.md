@@ -166,12 +166,18 @@ Write the prompt to point at real paths rather than pasting content, e.g.
 | `codex` | `codex exec --sandbox read-only --skip-git-repo-check --output-schema S -o F` | `F` |
 | `agy` | `agy --output-format stream-json --dangerously-skip-permissions --json-schema S -p` | last `.result.response` |
 | `cursor-agent` | `cursor-agent -p --trust --mode ask --output-format json` | `.result` |
+| `grok` | `bwrap --ro-bind / / … --bind ~/.grok ~/.grok grok -p … --output-format json` | `.text` |
 
 - **`codex exec` hangs forever on an open inherited stdin** — `</dev/null` is
   mandatory. Any naive parallel fan-out deadlocks without it.
 - **`codex --output-schema` needs an OpenAI *strict* schema**:
   `additionalProperties: false` at every level, every property in `required`,
   else HTTP 400 and `turn.failed`. See `scripts/schema-strict.json`.
+- **Default members are `codex grok` (2026-10-22).** The owner took Antigravity out and Cursor is
+  barred since 2026-09-20; `agy`/`cursor` stay callable only by explicit `PANEL_MEMBERS`.
+- **`grok --permission-mode plan` does not block writes** — a probe created a file. The panel runs grok
+  inside bubblewrap with the filesystem read-only (except `~/.grok` and a private `/tmp`); verified that
+  reads work and every write fails.
 - **`agy` uses Go flag parsing** — flags must precede `-p`, and the prompt is
   `-p`'s value. `agy -p --mode plan "…"` silently makes `"--mode"` the prompt
   and returns a plausible-looking help essay.
