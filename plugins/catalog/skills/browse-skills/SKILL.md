@@ -56,7 +56,7 @@ Anti-slop frontend design taste: brief-inference design reads, dial-driven varia
 
 | Skill | Description |
 |---|---|
-| `/design-taste:design-taste-frontend` | Anti-slop frontend skill for landing pages, portfolios, and redesigns. The agent reads the brief, infers the right design direction, and ships interfaces that do not look templated. Real design systems when applicable, audit-first on red... |
+| `/design-taste:design-taste-frontend` | Design taste for any visual surface - websites, apps, dashboards, tools, GTK desktop panels, iOS and Android screens, documents and decks. Use when designing, redesigning, critiquing, auditing, polishing, simplifying or hardening an inte... |
 
 ### `devops`
 

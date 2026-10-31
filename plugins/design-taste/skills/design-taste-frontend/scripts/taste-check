@@ -1,0 +1,113 @@
+#!/usr/bin/python3
+"""Flag mechanical design tells in source files. No model, no network.
+
+taste-check [--json] [--only slop|quality] PATH...
+Exit 0 clean, 2 findings, 1 nothing scannable.
+
+A finding is a prompt to decide, not a verdict: the brief can earn any of them.
+Tells go stale, so `slop` findings are advisory. `quality` findings are usually real.
+"""
+import argparse, json, math, re, sys
+from pathlib import Path
+
+SUFFIXES = {'.html', '.htm', '.css', '.scss', '.sass', '.jsx', '.tsx', '.vue', '.svelte', '.astro'}
+SKIP = {'node_modules', 'dist', 'build', '.git', '.next', 'vendor', 'out'}
+OVERUSED = r'Inter|Roboto|Fraunces|Geist|Plus Jakarta Sans|Space Grotesk|Instrument[ _]Serif'
+WEB = r'Inter|Roboto|Fraunces|Geist|Plus[+_ ]Jakarta[+_ ]Sans|Space[+_ ]Grotesk|Instrument[+_ ]Serif'
+BUZZ = (r'streamline|empower|supercharge|world-class|enterprise-grade|next-gen(eration)?|seamless(ly)?|'
+        r'revolutioni[sz]e|unleash|elevate your|cutting-edge|game-chang')
+PURPLE = r'#(6d28d9|7c3aed|8b5cf6|a855f7|9333ea|6366f1|4f46e5)\b|(violet|purple|indigo|fuchsia)-[4-7]00\b'
+CREAM = r'#(f5f1ea|f7f5f1|fbf8f1|efeae0|ece6db|faf7f1|e8dfcb|faf8f5|f5f0e8)\b|\b(amber|stone)-50\b'
+
+# id, group, pattern, flags, why
+RULES = [
+    ('side-tab', 'slop', r'border-(left|right):\s*[2-9]\d*(\.\d+)?(px|rem)|border-[lr]-[2-9]\b|border-[lr]-\[[2-9]px', 0, 'coloured side stripe'),
+    ('gradient-text', 'slop', r'bg-clip-text|(-webkit-)?background-clip:\s*text', 0, 'gradient text'),
+    ('overused-font', 'slop', rf'font-family:[^;}}"]*\b({OVERUSED})\b|font-\[[^\]]*({OVERUSED})|fonts\.googleapis\.com/css2?\?family=({WEB})|next/font/google.*\b({WEB})\b', 0, 'overused default font'),
+    ('italic-serif-display', 'slop', r'font-(serif|display)[^"\']*italic|italic[^"\']*font-(serif|display)', 0, 'italic serif display'),
+    ('ai-color-palette', 'slop', PURPLE, re.I, 'purple-indigo default palette'),
+    ('cream-palette', 'slop', rf'background(-color)?:\s*[^;]*({CREAM})|bg-({CREAM})|bg-\[({CREAM})\]', re.I, 'warm cream ground'),
+    ('hard-offset-shadow', 'slop', r'box-shadow:\s*-?[1-9]\d*(px)?\s+-?[1-9]\d*(px)?\s+0(px)?\s|shadow-\[-?\d+px_-?\d+px_0', 0, 'zero-blur offset shadow'),
+    ('dark-glow', 'slop', r'(box|text)-shadow:\s*0(px)?\s+0(px)?\s+[1-9]\d*px', 0, 'zero-offset glow'),
+    ('radial-halo', 'slop', r'radial-gradient\([^;]*transparent', 0, 'radial colour wash'),
+    ('repeating-stripes-gradient', 'slop', r'repeating-linear-gradient', 0, 'decorative stripes'),
+    ('codex-grid-background', 'slop', r'background-size:\s*\d+px\s+\d+px[^}]*|linear-gradient\([^;]*1px,\s*transparent\s+1px', 0, 'decorative grid'),
+    ('bounce-easing', 'slop', r'cubic-bezier\([^)]*-0?\.\d+[^)]*1\.\d+|cubic-bezier\(\s*[\d.]+\s*,\s*1\.[1-9]|animate-bounce|\belastic\b|easeOutBounce|bounce\.out', 0, 'bounce or elastic easing'),
+    ('pulsing-dot', 'slop', r'animate-(pulse|ping)\b', 0, 'pulsing decoration'),
+    ('blinking-cursor', 'slop', r'@keyframes\s+(blink|cursor|caret)|animate-(blink|cursor)', 0, 'fake blinking cursor'),
+    ('marquee', 'slop', r'<marquee|@keyframes\s+(marquee|ticker|scroll-x)|animate-marquee', 0, 'auto-scrolling content'),
+    ('extreme-negative-tracking', 'slop', r'letter-spacing:\s*-0?\.(0[5-9]|[1-9])\d*em|tracking-\[-0?\.(0[5-9]|[1-9])\d*em', 0, 'tracking past -0.04em'),
+    ('numbered-section-labels', 'slop', r'>\s*0\d\s*[/·.—–-]\s', 0, 'numbered section label'),
+    ('scroll-cue', 'slop', r'>\s*(↓\s*)?scroll( to explore| down)?\s*<', re.I, 'scroll cue'),
+    ('marketing-buzzword', 'slop', rf'>[^<]*\b({BUZZ})\b', re.I, 'marketing filler'),
+    ('theater-slop-phrase', 'slop', r'>[^<]*\b\w+ theater\b', re.I, '"theater" copy tic'),
+    ('em-dash-overuse', 'slop', r'>[^<]*[—–][^<]*<', 0, 'em or en dash in visible text'),
+    ('viewport-height', 'quality', r'\bh-screen\b|(?<![-\w])height:\s*100vh', 0, 'use min-h-[100dvh] or 100dvh'),
+    ('scroll-listener', 'quality', r'addEventListener\(\s*[\'"]scroll', 0, 'raw scroll listener'),
+    ('pure-colour', 'quality', r'#000000\b|(?<![\w-])#000\b|#ffffff\b', re.I, 'pure black or white'),
+    ('focus-removed', 'quality', r'outline:\s*(none|0)\b|\boutline-none\b(?!.*(ring|focus))', 0, 'focus ring removed'),
+    ('tight-leading', 'quality', r'^(?!.*\bh[1-6]\b).*line-height:\s*(1(\.[01]\d*)?|0?\.\d+)\s*[;}]', 0, 'line height under 1.2'),
+    ('tiny-text', 'quality', r'font-size:\s*(\d|1[01])(\.\d+)?px', 0, 'text under 12px'),
+    ('justified-text', 'quality', r'text-align:\s*justify|\btext-justify\b', 0, 'justified text'),
+    ('wide-tracking', 'quality', r'letter-spacing:\s*0?\.(0[6-9]|[1-9])\d*em', 0, 'wide letter spacing'),
+    ('broken-image', 'quality', r'<img\b(?![^>]*\bsrc=)|<img\b[^>]*\bsrc=["\'](#|placeholder[^"\']*)?["\']', re.I, 'image with no real source'),
+    ('placeholder-as-label', 'quality', r'<input\b(?![^>]*(aria-label|aria-labelledby|type=["\'](hidden|submit|button|checkbox|radio)))[^>]*placeholder=', re.I, 'check the input has a real label'),
+]
+COMPILED = [(i, g, re.compile(p, f), w) for i, g, p, f, w in RULES]
+COMMENTS = re.compile(r'<!--.*?-->|/\*.*?\*/', re.S)
+EYEBROW = re.compile(r'uppercase[^"\'>]*tracking|tracking[^"\'>]*uppercase|text-transform:\s*uppercase[^}]*letter-spacing')
+SECTION = re.compile(r'<(section|Section)\b')
+CARD = re.compile(r'class(Name)?=["\'][^"\']*\b(card|rounded-(lg|xl|2xl)[^"\']*\b(shadow|border)\b)')
+HEADING = re.compile(r'<h([1-6])\b')
+
+
+def files(paths):
+    for path in map(Path, paths):
+        if path.is_file():
+            yield path
+        elif path.is_dir():
+            for found in sorted(path.rglob('*')):
+                if found.suffix in SUFFIXES and found.is_file() and not SKIP & set(found.parts):
+                    yield found
+
+
+def scan(path):
+    # Blank comments but keep their newlines, so line numbers stay true.
+    text = COMMENTS.sub(lambda m: re.sub(r'[^\n]', ' ', m.group()), path.read_text(errors='ignore'))
+    for number, line in enumerate(text.splitlines(), 1):
+        for rule, group, pattern, why in COMPILED:
+            if pattern.search(line):
+                yield number, rule, group, why
+    sections, eyebrows = len(SECTION.findall(text)), len(EYEBROW.findall(text))
+    if sections and eyebrows > math.ceil(sections / 3):
+        yield 1, 'kicker-above-heading', 'slop', f'{eyebrows} uppercase labels across {sections} sections'
+    levels = [int(n) for n in HEADING.findall(text)]
+    if any(b - a > 1 for a, b in zip(levels, levels[1:])):
+        yield 1, 'skipped-heading', 'quality', 'heading level skipped'
+    if len(CARD.findall(text)) >= 3 and not sections:
+        yield 1, 'card-page', 'slop', 'page built from cards'
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('paths', nargs='+')
+    parser.add_argument('--json', action='store_true')
+    parser.add_argument('--only', choices=('slop', 'quality'))
+    args = parser.parse_args()
+    scanned, found = 0, []
+    for path in files(args.paths):
+        scanned += 1
+        for number, rule, group, why in scan(path):
+            if args.only in (None, group):
+                found.append({'file': str(path), 'line': number, 'rule': rule, 'group': group, 'why': why})
+    if args.json:
+        print(json.dumps(found, ensure_ascii=False))
+    else:
+        for item in found:
+            print(f"{item['file']}:{item['line']}: {item['group']}/{item['rule']}: {item['why']}")
+    print(f'{scanned} file(s), {len(found)} finding(s)', file=sys.stderr)
+    sys.exit(1 if not scanned else 2 if found else 0)
+
+
+if __name__ == '__main__':
+    main()

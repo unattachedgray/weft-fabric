@@ -1,0 +1,73 @@
+#!/usr/bin/python3
+"""Import Impeccable's references: import-impeccable <clone of pbakaus/impeccable>.
+
+Strips engine commands and rule markers so each file works without Impeccable's
+binary, then writes references/impeccable/ with its license and notices.
+"""
+import re, shutil, subprocess, sys
+from pathlib import Path
+
+KEEP = '''adapt adapt.native android animate audit audit.native bolder clarify colorize
+craft-floor critique delight distill extract harden ios layout mode-operate mode-persuade
+mode-read new-work onboard operate optimize overdrive polish quieter shape typeset'''.split()
+DROPPED = 'live live-setup hooks doctor init document generate region-map routing visualize craft component-review'
+source = Path(sys.argv[1])
+target = Path(__file__).resolve().parents[1] / 'references/impeccable'
+shutil.rmtree(target, ignore_errors=True)
+target.mkdir(parents=True)
+
+
+def clean(text):
+    text = re.sub(r'\s*<!-- rule:[^>]*-->', '', text)
+    text = re.sub(r'^</?(codex|claude)>\n', '', text, flags=re.M)
+    text = re.sub(r'\(reference/([\w.-]+)\.md', r'(\1.md', text)
+    out, block, inside = [], [], False
+    for line in text.splitlines():
+        if line.lstrip().startswith('```'):
+            if inside:
+                block.append(line)
+                if not any('impeccable' in row for row in block):
+                    out += block
+                block, inside = [], False
+            else:
+                block, inside = [line], True
+        elif inside:
+            block.append(line)
+        elif '{{scripts_path}}' in line or re.search(r'`?impeccable [a-z-]+', line) and '{{command_prefix}}' not in line:
+            continue
+        else:
+            out.append(line)
+    text = '\n'.join(out) + '\n'
+    text = re.sub(r'`?\{\{command_prefix\}\}impeccable ([a-z-]+)`?', r'`\1.md`', text)
+    text = text.replace('`{{command_prefix}}command-name`', '`reference-name`')
+    text = text.replace('{{available_commands}}', 'the references listed in SKILL.md')
+    text = re.sub(r'\[([\w.-]+)\]\((init|region-map|visualize|routing|document|hooks|live|generate)\.md[^)]*\)', r'\1', text)
+    return text.replace('{{ask_instruction}}', 'ask the owner').replace('{{config_file}}', 'the project config')
+
+
+def sections(text, wanted):
+    """Keep the title and only the numbered sections that work without the catalog."""
+    parts = re.split(r'(?m)^(?=## )', text)
+    return ''.join(p for p in parts[1:] if p[3:5].rstrip('.') in wanted)
+
+
+for name in KEEP:
+    text = clean((source / 'skill/reference' / f'{name}.md').read_text())
+    if name == 'critique':
+        text = '# Critique reference\n\n' + text[text.index('### Cognitive Load Assessment'):]
+    elif name == 'new-work':
+        text = '# New visual work\n\n' + sections(text, {'1', '2', '4'})
+    (target / f'{name}.md').write_text(text)
+shutil.copy2(source / 'LICENSE', target / 'LICENSE')
+commit = subprocess.run(['git', '-C', str(source), 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout.strip()
+(target / 'NOTICE.md').write_text(f'''# Notice
+
+These files derive from Impeccable by Paul Bakaus (https://github.com/pbakaus/impeccable),
+commit {commit}, under the Apache License 2.0 in `LICENSE`.
+
+Modified by `scripts/import-impeccable`: engine commands and rule markers removed, links
+rewritten, `critique` cut to its reference material, `new-work` cut to sections 1, 2 and 4.
+Not imported: {DROPPED}.
+
+{(source / 'NOTICE.md').read_text()}''')
+print(len(KEEP), 'files', commit[:7])

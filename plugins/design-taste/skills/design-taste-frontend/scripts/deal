@@ -1,0 +1,129 @@
+#!/usr/bin/python3
+"""Deal a design direction from the local catalog. No model, no network.
+
+deal "<brief>" [--mode persuade|operate|read|experience] [--count 3] [--seed S]
+deal --roll N [--seed S]       pick which of your own N ranked directions to build, never the first
+deal keep|reject <world-id>    record the owner's verdict; later deals read it
+deal list
+
+A model asked to choose returns the category default, so the dealing is done here. Relevance comes
+from BM25 over the catalog; recent deals are excluded; kept worlds gain tickets, rejected ones leave.
+"""
+import argparse, hashlib, json, math, os, re, sys, time
+from collections import Counter
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1] / 'catalog'
+STATE = Path(os.environ.get('XDG_STATE_HOME', Path.home() / '.local/state')) / 'design-taste'
+HISTORY = STATE / 'deals.jsonl'
+RECENT = 8
+SYNONYMS = {'dashboard': 'monitoring', 'clinic': 'health', 'bank': 'finance', 'store': 'shop', 'shop': 'commerce',
+            'docs': 'documentation', 'blog': 'news', 'portfolio': 'art', 'cafe': 'restaurant', 'saas': 'tool', 'app': 'tool'}
+
+
+def words(text):
+    found = re.findall(r'[a-z0-9]+', text.lower())
+    return found + [SYNONYMS[w] for w in found if w in SYNONYMS]
+
+
+def scores(query, docs, k1=1.5, b=0.75):
+    lengths = [len(d) for d in docs]
+    average = sum(lengths) / len(docs)
+    frequency = Counter(w for d in docs for w in set(d))
+    out = []
+    for doc, length in zip(docs, lengths):
+        counts, total = Counter(doc), 0.0
+        for word in set(query):
+            if word in counts:
+                idf = math.log(1 + (len(docs) - frequency[word] + 0.5) / (frequency[word] + 0.5))
+                total += idf * counts[word] * (k1 + 1) / (counts[word] + k1 * (1 - b + b * length / average))
+        out.append(total)
+    return out
+
+
+def events():
+    if not HISTORY.exists():
+        return []
+    rows = []
+    for line in HISTORY.read_text().splitlines():
+        try:
+            rows.append(json.loads(line))
+        except ValueError:
+            continue
+    return rows
+
+
+def record(**row):
+    STATE.mkdir(parents=True, exist_ok=True)
+    with open(HISTORY, 'a') as out:
+        out.write(json.dumps({'when': time.strftime('%Y-%m-%dT%H:%M:%S'), **row}) + '\n')
+
+
+def rank(seed, key):
+    return hashlib.sha256(f'{seed}:{key}'.encode()).hexdigest()
+
+
+def deal(args):
+    worlds = json.loads((ROOT / 'worlds.json').read_text())
+    rows = events()
+    rejected = {r['id'] for r in rows if r.get('verdict') == 'reject'}
+    kept = Counter(r['id'] for r in rows if r.get('verdict') == 'keep')
+    recent = [i for r in rows[::-1] if 'dealt' in r for i in r['dealt']][:RECENT * args.count]
+    pool = [w for w in worlds if w['id'] not in rejected and (not args.mode or args.mode in w['modes'])]
+    query = words(args.brief)
+    relevance = scores(query, [words(' '.join((w['name'], w['source'], w['tags']))) for w in pool])
+    seed = args.seed or time.strftime('%Y%m%d%H%M%S')
+    # Relevance orders a band, then the seed deals inside it: the best match must not always win.
+    ordered = sorted(zip(relevance, pool), key=lambda p: -p[0])
+    band = [w for s, w in ordered[:max(args.count * 3, 8)] if w['id'] not in recent]
+    if len(band) < args.count:
+        band = [w for _, w in ordered]
+    tickets = [(rank(seed, f"{w['id']}:{t}"), w) for w in band for t in range(1 + min(kept[w['id']], 2))]
+    dealt, seen = [], set()
+    for _, world in sorted(tickets, key=lambda t: t[0]):
+        if world['id'] not in seen:
+            seen.add(world['id'])
+            dealt.append(world)
+        if len(dealt) == args.count:
+            break
+    matched = sum(1 for word in set(query) if any(word in words(w['tags'] + ' ' + w['source']) for w in pool))
+    if query and matched / len(set(query)) < 0.2:
+        print('NOTE: the catalog barely matches this brief. Treat these as provocations, or add a world.')
+    for world in dealt:
+        print(f"\n{world['id']}: {world['name']} ({', '.join(world['modes'])})\n  from: {world['source']}\n  palette: {world['palette']}"
+              f"\n  type: {world['type']}\n  signature move: {world['move']}\n  avoid: {world['avoid']}")
+    record(dealt=[w['id'] for w in dealt], brief=args.brief, mode=args.mode, seed=seed)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('brief', nargs='*')
+    parser.add_argument('--mode', choices=('persuade', 'operate', 'read', 'experience'))
+    parser.add_argument('--count', type=int, default=3)
+    parser.add_argument('--seed')
+    parser.add_argument('--roll', type=int)
+    args = parser.parse_args()
+    head = args.brief[:1]
+    if args.roll:
+        if args.roll < 2:
+            sys.exit('--roll needs at least 2 candidates.')
+        value = int(rank(args.seed or time.time(), 'roll'), 16)
+        print(f'Build candidate {2 + value % (args.roll - 1)} of your {args.roll}, ranked best first.')
+    elif head in (['keep'], ['reject']) and len(args.brief) == 2:
+        known = {w['id'] for w in json.loads((ROOT / 'worlds.json').read_text())}
+        if args.brief[1] not in known:
+            sys.exit(f'Unknown world: {args.brief[1]}')
+        record(verdict=head[0], id=args.brief[1])
+        print(f'{head[0]}: {args.brief[1]}')
+    elif head == ['list']:
+        for world in json.loads((ROOT / 'worlds.json').read_text()):
+            print(f"{world['id']:22} {'/'.join(world['modes'])}")
+    elif args.brief:
+        args.brief = ' '.join(args.brief)
+        deal(args)
+    else:
+        parser.print_help()
+
+
+if __name__ == '__main__':
+    main()

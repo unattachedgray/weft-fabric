@@ -1,0 +1,57 @@
+#!/usr/bin/python3
+"""Score both checkers on a fixture folder whose file names start with a rule id.
+
+eval-detector <fixtures> <rules.json> [--jobs N]
+Recall is measured on each rule's canonical fixture, <rule>.html. Prints the misses,
+so the next rule to write is chosen by evidence.
+"""
+import concurrent.futures as cf, json, subprocess, sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+fixtures, rules = Path(sys.argv[1]), [r['id'] for r in json.loads(Path(sys.argv[2]).read_text())]
+jobs = int(sys.argv[sys.argv.index('--jobs') + 1]) if '--jobs' in sys.argv else 6
+
+
+def run(rule):
+    path = next((fixtures / f'{rule}{s}' for s in ('.html', '.css', '.jsx', '.tsx') if (fixtures / f'{rule}{s}').exists()), None)
+    if path is None:
+        return rule, None, set(), set()
+    static = subprocess.run([str(HERE / 'taste-check'), '--json', str(path)], capture_output=True, text=True)
+    source = {f['rule'] for f in json.loads(static.stdout or '[]')}
+    rendered = set()
+    if path.suffix == '.html':
+        result = subprocess.run(['node', str(HERE / 'render-check.mjs'), str(path), '--json', '--no-scripts', '--no-history', '--widths', '1280'], capture_output=True, text=True, timeout=60)
+        if result.stdout:
+            rendered = {f['rule'] for w in json.loads(result.stdout)['widths'] for f in w['findings']}
+    return rule, path.name, source, rendered
+
+
+with cf.ThreadPoolExecutor(jobs) as pool:
+    rows = list(pool.map(run, rules))
+tested = [r for r in rows if r[1]]
+hits = [r for r in tested if r[0] in r[2] | r[3]]
+print(f'{len(rules)} rules, {len(tested)} with a canonical fixture, {len(hits)} caught, '
+      f'recall {len(hits) / max(1, len(tested)):.0%}')
+print('static only:', sum(r[0] in r[2] and r[0] not in r[3] for r in hits),
+      ' render only:', sum(r[0] in r[3] and r[0] not in r[2] for r in hits))
+print('MISSED:', ' '.join(r[0] for r in tested if r not in hits))
+print('NO FIXTURE:', ' '.join(r[0] for r in rows if not r[1]))
+
+# Held out: the variant fixtures were not used to write the rules. Some are negatives by design,
+# so this is a floor on recall, and a rule firing on its own variant is counted either way.
+variants = [p for p in sorted(fixtures.glob('*.html')) if any(p.stem.startswith(r + '-') for r in rules)]
+
+
+def held(path):
+    rule = max((r for r in rules if path.stem.startswith(r + '-')), key=len)
+    result = subprocess.run(['node', str(HERE / 'render-check.mjs'), str(path), '--json', '--no-scripts', '--no-history', '--widths', '1280'], capture_output=True, text=True, timeout=60)
+    static = subprocess.run([str(HERE / 'taste-check'), '--json', str(path)], capture_output=True, text=True)
+    fired = {f['rule'] for w in json.loads(result.stdout or '{"widths":[]}')['widths'] for f in w['findings']} | {f['rule'] for f in json.loads(static.stdout or '[]')}
+    return path.stem, rule in fired, len(fired)
+
+
+with cf.ThreadPoolExecutor(jobs) as pool:
+    held_rows = list(pool.map(held, variants))
+print(f'held-out variants: {len(held_rows)}, own rule fired on {sum(r[1] for r in held_rows)} '
+      f'({sum(r[1] for r in held_rows) / max(1, len(held_rows)):.0%}), mean rules fired {sum(r[2] for r in held_rows) / max(1, len(held_rows)):.1f}')

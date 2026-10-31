@@ -1,0 +1,64 @@
+#!/usr/bin/python3
+"""Study live sites in Firefox through Browser Tunnel: site-study URL [URL...].
+
+Runs the render probe in a sandboxed background tab, then closes the tab. Each site's fonts, palette
+and section rhythm land in references.jsonl, which render-check uses as its human baseline.
+Numbers only: page text and screenshots are not kept. Pace is deliberate.
+"""
+import json, os, random, re, subprocess, sys, time
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+TUNNEL = Path.home() / '.claude/skills/firefox-control/scripts/firefox-control'
+STATE = Path(os.environ.get('XDG_STATE_HOME', Path.home() / '.local/state')) / 'design-taste'
+
+
+def tunnel(*args):
+    return subprocess.run([str(TUNNEL), *args], capture_output=True, text=True, timeout=60).stdout
+
+
+def data(text):
+    return json.loads(text[text.index('{'):] if not text.lstrip().startswith('{') else text)
+
+
+def study(url, probe):
+    opened = tunnel('open', url)
+    match = re.search(r'tab(\d+)', opened) or re.search(r'"(?:tabId|id)":\s*(\d+)', opened)
+    if not match:
+        raise RuntimeError(f'no tab id: {opened[:160]}')
+    tab = match.group(1)
+    try:
+        time.sleep(random.uniform(9, 14))
+        name = next((row.split()[0] for row in tunnel('armed').splitlines() if f'tab{tab} ' in row), None)
+        reply = data(tunnel('--tab', name, 'eval', f'JSON.stringify({probe})'))
+        if not reply.get('ok') or reply.get('data') is None:
+            raise RuntimeError(f"eval blocked: {reply.get('error') or 'strict CSP, probably'}")
+        return json.loads(reply['data'])
+    finally:
+        tunnel('close', '--tab', tab)
+
+
+def main():
+    probe = subprocess.run(['node', str(HERE / 'render-check.mjs'), '--print-probe'], capture_output=True, text=True).stdout.strip()
+    if not probe or len(sys.argv) < 2:
+        sys.exit(__doc__)
+    STATE.mkdir(parents=True, exist_ok=True)
+    failed = 0
+    for index, url in enumerate(sys.argv[1:]):
+        if index:
+            time.sleep(random.uniform(16, 30))
+        try:
+            result = study(url, probe)
+        except (RuntimeError, ValueError, subprocess.TimeoutExpired) as error:
+            print(f'{url}: {error}')
+            failed += 1
+            continue
+        row = {'url': url, 'when': time.strftime('%Y-%m-%d'), 'signature': result['signature'], 'rules': sorted({f['rule'] for f in result['found']})}
+        with open(STATE / 'references.jsonl', 'a') as out:
+            out.write(json.dumps(row) + '\n')
+        print(f"{url}: {result['signature']['fonts'][:2]}, {len(row['rules'])} rule(s): {' '.join(row['rules'])}")
+    sys.exit(1 if failed else 0)
+
+
+if __name__ == '__main__':
+    main()
