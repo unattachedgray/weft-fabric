@@ -2,7 +2,6 @@
 name: diagnostic-loop
 description: Build a measurement loop you can trust before hunting a bug. Use when a symptom is reported that you cannot yet reproduce or measure — especially visual, timing, or intermittent ones, or any bug where your first sensor came back empty.
 ---
-
 # Diagnostic Loop
 
 For hunting a defect, not for deciding an adoption (that is `flywheel-audit`).
@@ -16,7 +15,7 @@ better. Validity comes before cadence.
 
 Then the harness IS the task. Build injection/observation first, before any
 hypothesis. Do not ask them to reproduce it more than once; a second ask means
-you are the bottleneck (`AGENTS.md` → Iterate Independently).
+you are the bottleneck (`AGENTS.md` → The owner's role).
 
 State what the harness will consume — screen, keyboard, machine, quota — before
 you run it. A loop that occupies the user's desktop is not free.

@@ -274,11 +274,10 @@ files, resolves symlinked entries, and does not recurse. Verified 2026-08-16: a
 real `dsh` run listed two skills symlinked into a scratch project, `ste` included,
 so the extra `clis:` frontmatter does not break its parser.
 
-Wired on 2026-08-16 through `~/.dsh/cordis.patch.yml`, which points
-`customSkillDirs` at `principles/skills` and `plugins/devops/skills`. Prefer that
-over per-skill symlinks here: it points at a whole folder, so a new skill in it
-appears with no relinking. Nothing else in this library has that property. A real
-session lists all six skills from those two folders.
+`cli-targets.json` now manages per-skill links in `~/.dsh/skills`, so skills
+converge for `dsh` as they do for every other CLI (47 links on 2026-10-30). The
+older folder pointers (`customSkillDirs` in `~/.dsh/cordis.patch.yml`, set on
+2026-08-16) remain in place and overlap with those links.
 
 `dsh` has **no plugin marketplace for skills and no output styles**. Do not try
 to register the `unatt` marketplace with it.
@@ -401,12 +400,12 @@ Do not "clean up" these without understanding them:
 ## 7. Open question, deliberately left open
 
 The `principles/AGENTS.md` diet dropped **§6 "Desktop Screenshots Need
-Confirmation"** — a security guardrail requiring confirmation before capturing
-the desktop, and vetting of any new skill/plugin/MCP that can screenshot, read
-the clipboard, capture mic/webcam, decrypt browser cookies, harvest `.env`, or
-run autonomously from session-start hooks.
+Confirmation"**, removed without a commit message explaining why. The owner
+restored the screenshot rule on 2026-10-30: explicit confirmation every time,
+from every CLI.
 
-That is precisely the rule that would gate installing a marketplace. It was
-removed without a commit message explaining why. Restoring it is the owner's
-call — flagged here so it is not lost again silently. An agent should not
-decide this one alone.
+Still open: the same section also required flagging any new skill, plugin, MCP
+server or tool that can screenshot, read the clipboard, capture mic/webcam,
+decrypt browser cookies, harvest `.env`, or run autonomously from session-start
+hooks. That is precisely the rule that would gate installing a marketplace.
+Restoring it is the owner's call. An agent should not decide this one alone.
