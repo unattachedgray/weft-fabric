@@ -27,12 +27,12 @@
     {
       "name": "design-taste",
       "source": "./plugins/design-taste",
-      "description": "Anti-slop frontend design taste (vendored from leonxlnx/taste-skill, MIT): brief-inference design reads with variance/motion/density dials, aesthetic families (minimalist editorial, industrial brutalist, high-end agency soft), redesign audits, brand-kit + frontend image-gen direction, image-to-code, Stitch DESIGN.md generation, full-output enforcement."
+      "description": "Design taste for any visual surface: surface modes, anti-slop rules, task references adapted from Impeccable, a local catalog of directions with dealing, and offline source and render checkers."
     },
     {
       "name": "devops",
       "source": "./plugins/devops",
-      "description": "Browser and machine operations: authenticated Firefox control, Reddit research through an armed tab, Facebook comment exports, LAN access, privileged commands, setup wizards, and deployment tooling."
+      "description": "Browser and machine operations: authenticated Firefox control, the serious-research procedure with Reddit, Facebook comment exports, LAN access, privileged commands, setup wizards, deployment tooling, Bottles installs, and native game trainers."
     },
     {
       "name": "review",

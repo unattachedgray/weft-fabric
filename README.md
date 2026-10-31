@@ -87,8 +87,8 @@ Then install plugins selectively (see [Plugins](#plugins) below for what each co
 ```
 /plugin install skill-detectors@unatt
 /plugin install catalog@unatt
-/plugin install workflow@unatt
-/plugin install frontend@unatt
+/plugin install devops@unatt
+/plugin install design-taste@unatt
 # ...
 ```
 
@@ -113,23 +113,17 @@ Plugins use commit-SHA versioning — every push to this repo bumps the version 
 
 | Plugin | Skills | What it covers |
 |---|---|---|
-| [`skill-detectors`](plugins/skill-detectors/) | 1 + hooks | Surfaces context-conditional skills automatically — SessionStart emits `SKILL_SIGNAL` markers from disk state, UserPromptSubmit emits `SKILL_SIGNAL_CANDIDATE` markers from chat content. See [Skill detectors](#skill-detectors). |
 | [`catalog`](plugins/catalog/) | 1 | Auto-regenerated index of every skill across every plugin in this marketplace. Install on every machine so Claude knows what's available even if uninstalled. |
-| [`workflow`](plugins/workflow/) | 7 | Project-agnostic dev lifecycle, builds, evals, persona switching, planning, brainstorming, full-stack scaffolding from natural language. |
-| [`frontend`](plugins/frontend/) | 10 | React + Next.js, Tailwind v4, design systems, mobile-first, browser automation, theme application, accessibility/WIG, text-aware layout via pretext. |
-| [`backend`](plugins/backend/) | 8 | Node.js / TypeScript microservices, system architecture, schema design, API integration, type-level TS, JS fundamentals, Bun. |
-| [`devops`](plugins/devops/) | 6 | Authenticated Firefox control and Reddit research, Facebook comment exports, LAN and sudo access, setup wizards, and deployment tooling. |
-| [`claude-stack`](plugins/claude-stack/) | 3 | Anthropic ecosystem — Claude API / Agent SDK, MCP servers, Gemini CLI for big-context review, advanced prompt engineering. |
-| [`ai-agents`](plugins/ai-agents/) | 5 | Building autonomous agents: architecture, memory, multi-agent orchestration, local CLI agent management, AGENTS.md/CLAUDE.md refactoring. |
-| [`ai-ml`](plugins/ai-ml/) | 3 | Data science, data engineering, LangChain for LLM apps with agents/RAG/tool calling. |
-| [`review`](plugins/review/) | 3 | Code quality, security review (auth/secrets/vulnerabilities), security audit (secrets/ports/DB integrity). |
-| [`content`](plugins/content/) | 4 | PDF manipulation, local-file NotebookLM-style analysis (FTS5+MCP), Google NotebookLM via browser, meme generation. |
-| [`business`](plugins/business/) | 5 | CEO advisory, marketing ideas, App Store Optimization, UX research, email systems. |
-| [`automation`](plugins/automation/) | 3 | Jira workflows, metric watchers/alerts, Zapier orchestration via MCP + webhooks. |
-| [`wordpress`](plugins/wordpress/) | 1 | Comprehensive WordPress development — block themes, custom blocks (apiVersion 3, Block Bindings, Pattern Overrides, Section Styles), plugins, REST API, Interactivity API, performance, security, a11y (WCAG 2.2 AA), wp.org compliance, wp-env + wp-scripts. |
-| [`skill-management`](plugins/skill-management/) | 3 | Discover, create, and propagate skills across your library. |
-| [`universal-modder`](plugins/universal-modder/) | 10 | Game recon, repair, modding, cross-game mechanic ports, asset pipelines and field notes. |
-| [`reverse-tooling`](plugins/reverse-tooling/) | 2 | REA artifact inspection and iterative Ghidra analysis; local native, .NET, IL2CPP and Java tool routing. |
+| [`claude-stack`](plugins/claude-stack/) | 2 | Cross-CLI review panels and LLM pricing data. |
+| [`content`](plugins/content/) | 9 | Office documents, PDF work and page operations, NotebookLM, plain-English writing, and Unattached articles. |
+| [`design-taste`](plugins/design-taste/) | 1 | Design taste for any visual surface: surface modes, anti-slop rules, task references adapted from Impeccable, a local catalog of directions with dealing, and offline source and render checkers. |
+| [`devops`](plugins/devops/) | 8 | Authenticated Firefox control, the research procedure with Reddit, Facebook comment exports, LAN and sudo access, setup wizards, Bottles installs and native game trainers. |
+| [`reverse-tooling`](plugins/reverse-tooling/) | 2 | REA artifact inspection, game internals, and iterative Ghidra analysis. |
+| [`review`](plugins/review/) | 3 | Code quality, security review and security audit, for CLIs without built-ins. |
+| [`skill-detectors`](plugins/skill-detectors/) | 1 + hooks | Surfaces context-conditional skills automatically — SessionStart emits `SKILL_SIGNAL` markers from disk state, UserPromptSubmit emits `SKILL_SIGNAL_CANDIDATE` markers from chat content. See [Skill detectors](#skill-detectors). |
+| [`skill-management`](plugins/skill-management/) | 1 | The periodic skill audit. |
+| [`universal-modder`](plugins/universal-modder/) | 9 | Game recon, repair, modding, cross-game mechanic ports, asset pipelines and field notes. |
+| [`website-cloner`](plugins/website-cloner/) | 1 | Rebuild a website from a reference, with its tooling. |
 
 For the live skill-by-skill catalog, install `catalog@unatt` and read `/catalog:browse-skills` — it's regenerated on every push.
 
@@ -193,7 +187,7 @@ plugins/<name>/
     └── hooks.json
 ```
 
-Skills get namespaced slash commands like `/frontend:senior-frontend`, `/wordpress:wordpress-development`. Triggered by typing the slash command, or auto-loaded when the skill's `description` matches the user's request.
+Skills get namespaced slash commands like `/devops:firefox-control`. Triggered by typing the slash command, or auto-loaded when the skill's `description` matches the user's request.
 
 ## Recent Changes
 

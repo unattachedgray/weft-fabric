@@ -52,7 +52,7 @@ Content + document tools: Office documents (docx/pptx/xlsx create+edit), PDF man
 
 ### `design-taste`
 
-Anti-slop frontend design taste: brief-inference design reads, dial-driven variance/motion/density, plus aesthetic families (minimalist editorial, industrial brutalist, high-end agency), redesign audits, brand-kit and frontend image-generation direction, image-to-code, Stitch DESIGN.md generation, and full-output enforcement. Vendored from leonxlnx/taste-skill (MIT).
+Design taste for any visual surface: surface modes, anti-slop rules, task references adapted from Impeccable, a local catalog of directions with dealing, and offline source and render checkers.
 
 | Skill | Description |
 |---|---|

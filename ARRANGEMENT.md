@@ -393,6 +393,10 @@ Do not "clean up" these without understanding them:
   claimed a local-path registration with live edits; measured 2026-09-04 on two
   machines, that was not the case. This is why skills reach Claude Code by
   symlink and only hook-bearing plugins are installed from the marketplace.
+- **`pdf-ops` stays at its path.** Weft's PDF editor hard-codes
+  `~/.claude/skills/pdf-ops/scripts/pdf_ops.ts` in its permission rules
+  (`plugins/weft/pdf.py`, `plugins/weft/chat/drainer.py`). Moving or merging the
+  skill breaks that feature. Grep `~/dev/weft` before moving any skill.
 - **The remote holds history this clone once lost.** The local clone was
   disconnected with a flattened one-commit history; it was grafted back on top
   of `origin/main`. **Never `push --force`** here.
