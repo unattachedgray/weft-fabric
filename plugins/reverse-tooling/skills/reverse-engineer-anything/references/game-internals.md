@@ -1,8 +1,4 @@
----
-name: reverse-engineering
-description: Read how a game actually works so a mod can hook it. Decompile .NET/Mono (ILSpy), IL2CPP (Cpp2IL, Il2CppDumper), Java (Vineflower) and native code (Ghidra, IDA, via MCP servers); dump data and asset formats; reverse-engineer a binary file format and prove it with a round trip; read live memory (Cheat Engine, Frida, x64dbg); find render passes (RenderDoc). Use when a mod needs game internals, e.g. "how does the boss AI work", "find the damage function", "what format is this .sld/.pak/.dat", "where is the player position in memory".
----
-# Reverse engineering for mods
+# Game internals for mods
 
 Rule zero: **read the real thing, don't guess.** Decompiled code, the actual data, a live memory view or a
 GPU capture is the spec. Write what you learn into `MODLOG.md` (names, IDs, offsets, formats) as you go.

@@ -19,7 +19,7 @@ session's research could not be banked at all. Stdin passes through ssh, so
 (2026-09-17): the SSH trust already exceeds the leaf's read-only vault token.
 
 That makes the shared core's "run wtask brief at session start" rule, and the
-recall/bank steps of session-recall and research-first, work everywhere
+recall/bank steps of reddit-research, work everywhere
 instead of only on the owner host.
 
 Owner host resolution, first hit wins:

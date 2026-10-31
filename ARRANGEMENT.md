@@ -275,7 +275,7 @@ real `dsh` run listed two skills symlinked into a scratch project, `ste` include
 so the extra `clis:` frontmatter does not break its parser.
 
 `cli-targets.json` now manages per-skill links in `~/.dsh/skills`, so skills
-converge for `dsh` as they do for every other CLI (47 links on 2026-10-30). The
+converge for `dsh` as they do for every other CLI. The
 older folder pointers (`customSkillDirs` in `~/.dsh/cordis.patch.yml`, set on
 2026-08-16) remain in place and overlap with those links.
 

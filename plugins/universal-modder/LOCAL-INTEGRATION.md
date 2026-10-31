@@ -25,7 +25,7 @@ architecture, runtime and failure before changing anything.
 
 | Target / need | Tool and skill |
 | --- | --- |
-| Engine, loader, saves, file formats | Universal Modder `game-recon` and `reverse-engineering`; `game-re-tools um scan` |
+| Engine, loader, saves, file formats | Universal Modder `game-recon` and `reverse-engineer-anything` (references/game-internals.md); `game-re-tools um scan` |
 | Native binaries and persistent analysis projects | `ghidra-iterative-re`; the `ghidra` MCP server or `game-re-tools ghidra-cli` |
 | Shipped artifact inspection, version comparison, JavaScript/Electron, managed metadata | `reverse-engineer-anything`; `rea` MCP or `game-re-tools rea` |
 | .NET/Unity Mono/XNA | `game-re-tools ilspycmd`; inspect real assemblies before using native analysis |

@@ -96,8 +96,10 @@ cmd_run() {
       # created a file. Read-only comes from bubblewrap: the whole filesystem mounted
       # read-only except grok's own state dir and a private /tmp. Verified: reads work,
       # every write (editor and shell, even with --always-approve) fails "Read-only".
-      grok)   timeout "$TIMEOUT" bwrap --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp \
-                --bind "$HOME/.grok" "$HOME/.grok" --chdir "$PWD" \
+      grok)   # The private /tmp hides anything under it, so start from $HOME there.
+              case "$PWD" in /tmp|/tmp/*) GROK_CWD="$HOME" ;; *) GROK_CWD="$PWD" ;; esac
+              timeout "$TIMEOUT" bwrap --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp \
+                --bind "$HOME/.grok" "$HOME/.grok" --chdir "$GROK_CWD" \
                 grok -p "$PROMPT" --output-format json ;;
       cursor) timeout "$TIMEOUT" cursor-agent -p --trust --mode ask --output-format json \
                 ${PANEL_CURSOR_MODEL:+--model "$PANEL_CURSOR_MODEL"} \
@@ -127,7 +129,7 @@ cmd_run() {
   print(json.dumps(best))' "$OUT/$name.txt" >"$OUT/$name.json" 2>/dev/null || echo null >"$OUT/$name.json"
 
     printf '%-8s rc=%-3s %3ss  %s\n' "$name" "$rc" "$((SECONDS-t0))" \
-      "$(jq -r 'if .==null then "UNPARSEABLE" else "\(.verdict) conf=\(.confidence) findings=\(.findings|length)" end' <"$OUT/$name.json")" >&2
+      "$([ "$rc" = 124 ] && echo "TIMEOUT after ${TIMEOUT}s" || jq -r 'if .==null then "UNPARSEABLE" else "\(.verdict) conf=\(.confidence) findings=\(.findings|length)" end' <"$OUT/$name.json")" >&2
   }
 
   for m in $MEMBERS; do run "$m" & done
@@ -408,6 +410,10 @@ cmd_detect() {
 
   prompt="$(cat)"
   [ -n "$prompt" ] || exit 0
+  # Background-task notifications reach this hook as prompt text. They are not the
+  # owner's words, and an agent's own task summary mentioning "other CLIs" fired it.
+  prompt="$(printf '%s' "$prompt" | sed '/<task-notification>/,/<\/task-notification>/d')"
+  [ -n "$prompt" ] || exit 0
   low="$(printf '%s' "$prompt" | tr '[:upper:]' '[:lower:]')"
 
   hit() { printf '%s' "$low" | grep -Eq "$1"; }
@@ -415,7 +421,7 @@ cmd_detect() {
   # --- explicit asks: the user is already requesting it -----------------------
   if hit 'second opinion|cross[- ]?check|cross[- ]?review|peer review|multi[- ]?ai|other (cli|model|agent)s?|another (model|agent) (to )?(check|review|verify)|sanity[- ]?check this'; then
     if [ "$MODE" = "auto" ]; then
-      echo "SKILL_SIGNAL: multi-ai-review — the request explicitly asks for outside verification. RUN scripts/panel.sh now, then report the union of findings alongside your answer."
+      echo "SKILL_SIGNAL: multi-ai-review — the request explicitly asks for outside verification. RUN scripts/panel run <prompt-file> now, then report the union of findings alongside your answer."
     else
       echo "SKILL_SIGNAL_CANDIDATE: multi-ai-review — the request explicitly asks for outside verification."
     fi
@@ -473,7 +479,7 @@ cmd_detect() {
   GATE="Stakes are necessary but NOT sufficient: the other CLIs must be able to OBSERVE something Claude cannot. If they could only restate what you already know, skip and say so. Never send secrets, credentials, PII, or internal source — point reviewers at paths on disk instead of pasting content."
 
   if [ "$MODE" = "auto" ]; then
-    echo "SKILL_SIGNAL: multi-ai-review —${reasons// / }. Do the work, then RUN scripts/panel.sh (set PANEL_KIND and PANEL_TARGET so it can score itself) and report the union of findings before treating it as done. $GATE"
+    echo "SKILL_SIGNAL: multi-ai-review —${reasons// / }. Do the work, then RUN scripts/panel run <prompt-file> (set PANEL_KIND and PANEL_TARGET so it can score itself) and report the union of findings before treating it as done. $GATE"
   else
     echo "SKILL_SIGNAL_CANDIDATE: multi-ai-review —${reasons// / }.${DEMOTED} $GATE"
   fi

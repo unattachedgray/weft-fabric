@@ -10,11 +10,6 @@
   },
   "plugins": [
     {
-      "name": "business",
-      "source": "./plugins/business",
-      "description": "Business / go-to-market: CEO advisory and strategy, marketing ideas (140 SaaS marketing approaches), App Store Optimization, UX research (interviews, personas, journey mapping), email systems (deliverability, automation, transactional)."
-    },
-    {
       "name": "catalog",
       "source": "./plugins/catalog",
       "description": "A generated index of every skill in the unatt marketplace, including plugins not installed on this machine. Regenerated on every release, so it is never out of date with the repo."
@@ -40,14 +35,9 @@
       "description": "Browser and machine operations: authenticated Firefox control, Reddit research through an armed tab, Facebook comment exports, LAN access, privileged commands, setup wizards, and deployment tooling."
     },
     {
-      "name": "frontend",
-      "source": "./plugins/frontend",
-      "description": "Frontend stack: React + Next.js, TypeScript-based component patterns, Tailwind v4, design systems / UI design tokens, mobile-first design, browser automation, theme application, accessibility/WIG compliance, and text-aware layout via pretext."
-    },
-    {
       "name": "review",
       "source": "./plugins/review",
-      "description": "Code review and security audit procedures \u2014 for CLIs without built-in review commands"
+      "description": "Code review and security audit procedures — for CLIs without built-in review commands"
     },
     {
       "name": "skill-detectors",

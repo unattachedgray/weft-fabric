@@ -138,6 +138,14 @@ comm -23 \
       sed 's/.*:"//;s/"//;s/^.*://' | sort -u)
 ```
 
+**Check `skillOverrides` first.** `~/.claude/settings.json` switches skills off per name, so a linked skill may be unreachable in Claude Code. Measured 2026-10-30: 31 of 45 linked skills were off, and every one of them correctly scored zero. A zero for a skill that is off carries no information.
+
+**Keep the scan fast.** Session logs are gigabytes with very long lines. Use `LC_ALL=C grep -F` to filter, `cut -c1-1500` before any regex, and `timeout`. Never run a Python regex over the full logs: one such scan used a core for 55 minutes without finishing, printed nothing because its stdout was buffered, and had to be killed. Use `python3 -u` and print progress.
+
+**Other CLIs need their own measure.** Paths in a session's skill listing are not invocations: `skills/<name>/SKILL.md` appears in nearly every Codex session whether or not the skill ran. On 2026-10-30, `"function_call"` matched only 117 of 5,650 Codex logs and no skill opens, so Codex use is still unmeasured; find its real tool-call format before deleting on Codex evidence.
+
+**Check callers before merging or moving.** Grep `~/dev/weft` for the skill's path. Weft's PDF editor hard-codes `~/.claude/skills/pdf-ops/scripts/pdf_ops.ts` in its permission rules, so that skill cannot move.
+
 **Zero invocations only means something if the skill was reachable.** Until the
 marketplace was registered on 2026-08-08 at 16:09, all but ~6 symlinked skills
 were installable by nobody — so their invocation count was structurally zero and
@@ -185,8 +193,8 @@ rotted:
 ## Afterwards
 
 - `bash scripts/deploy-principles.sh` if anything under `principles/` moved.
-- Marketplace is registered against the local path, so repo edits are live —
-  no push needed for them to take effect, though push anyway.
+- Skills reach CLIs by symlink, so repo edits are live here. Other machines need
+  a push; hook-bearing plugins come from the marketplace, pinned to a commit.
 - Record what went and why in the commit. The next audit should not have to
   re-derive the reasoning.
 

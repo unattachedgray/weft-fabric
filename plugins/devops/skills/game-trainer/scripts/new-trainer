@@ -1,0 +1,41 @@
+#!/usr/bin/python3
+"""Create a trainer project: new-trainer "<Game>" <executable> [--root DIR] [--no-launcher]."""
+import argparse, hashlib, json, os, re, shutil, stat, subprocess
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parents[1] / 'templates'
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('game')
+parser.add_argument('executable', type=Path)
+parser.add_argument('--root', type=Path, default=Path.home() / 'Games')
+parser.add_argument('--no-launcher', action='store_true', help='skip ~/.local entries (for tests)')
+args = parser.parse_args()
+
+exe = args.executable.resolve()
+if not exe.is_file():
+    raise SystemExit(f'Not a file: {exe}')
+project = args.root / f'{args.game} Trainer'
+if project.exists():
+    raise SystemExit(f'Already exists, refusing to overwrite: {project}')
+slug = re.sub(r'[^a-z0-9]+', '-', args.game.lower()).strip('-')
+project.mkdir(parents=True)
+for name in ('processes.py', 'memory.py', 'trainer.py', 'test_memory.py'):
+    shutil.copy2(HERE / name, project / name)
+(project / 'trainer.py').chmod(0o755)
+digest = hashlib.sha256(exe.read_bytes()).hexdigest()
+(project / 'config.json').write_text(json.dumps(
+    {'title': f'{args.game} Trainer', 'executable': str(exe), 'sha256': digest}, indent=2) + '\n')
+(project / 'MODLOG.md').write_text(f'# {args.game} Trainer log\n\nExecutable SHA-256: `{digest}`\n\n'
+                                   'Record each offset, what proved it, and what was tried and discarded.\n')
+(project / 'README.md').write_text(f'# {args.game} Trainer\n\nValidated build SHA-256: `{digest}`\n\n'
+                                   '## Controls\n\n## Limits\n\n## Verification\n\n## Rollback\n')
+print(project)
+if not args.no_launcher:
+    launcher = Path.home() / f'.local/bin/{slug}-trainer'
+    launcher.write_text(f'#!/bin/sh\nexec /usr/bin/python3 "{project}/trainer.py" "$@"\n')
+    launcher.chmod(launcher.stat().st_mode | stat.S_IEXEC)
+    entry = Path.home() / f'.local/share/applications/{slug}-trainer.desktop'
+    entry.write_text(f'[Desktop Entry]\nType=Application\nName={args.game} Trainer\n'
+                     f'Exec={launcher}\nTerminal=false\nCategories=Game;\n')
+    print(launcher)
+    print(entry)

@@ -1,8 +1,18 @@
 ---
 name: reddit-research
-description: Research a technical question on Reddit through the owner's own logged-in browser, at a human pace, and return distilled findings with the load-bearing caveats. Use when a question is about practitioner experience — what settings people actually use, what broke for them, which tool won — rather than documentation.
+description: Serious-research procedure. Check what past sessions and the vault already know (wrecall, raw transcripts), research multi-source, read Reddit through the owner's logged-in browser at a human pace, and bank distilled findings (wnote). Use before a novel task, when a named project has no context here, or when a question is about practitioner experience — what settings people actually use, what broke for them, which tool won — rather than documentation.
 ---
-# Reddit research
+# Research
+
+## Before and after any search
+
+1. **Look first.** `wrecall --brief "<topic>"` (no LLM, ~25 ms), then full `wrecall` only if it shows something. Answers are leads to verify. If the vault is silent, search the raw Claude Code transcripts across every project: `python3 <this skill>/scripts/session-recall --help`. If it is covered, start from the banked conclusions and do not re-research.
+2. **On a miss, use several sources.** GitHub for reference implementations, official docs for behaviour, Reddit (below) for what people found out. Prefer primary sources. Keep conclusions, not dumps.
+3. **Bank what you established.** `wnote <slug> "body"` upserts what is true now; `wnote <slug> --section 기록 --append "- <date> — …"` adds a dated line; long bodies go on stdin. Record the question, the load-bearing findings, the top sources, what you built from them, and label research notes `research`. Sources drift, so date-stamp.
+
+Never call `wrecall` or `wnote` by their `~/dev/weft/...` path; only the owner host has it. Skip this loop for trivial or known tasks.
+
+## Reddit
 
 Reddit holds a class of knowledge that documentation does not: what people who
 actually ran the thing found out. Settings they measured, the workflow that was

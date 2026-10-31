@@ -16,7 +16,7 @@ user runs; never on anti-cheat-protected games (see safety.md).
 - **Proton/Linux:** `WINEDLLOVERRIDES="dinput8=n,b" %command%`.
 
 ## 2. Find what to hook
-- **Static analysis:** Ghidra or IDA, driven by an agent through MCP (reverse-engineering skill). Start from
+- **Static analysis:** Ghidra or IDA, driven by an agent through MCP (reverse-engineer-anything skill). Start from
   strings (UI text, log messages, asset names) and imports (D3D, XInput, file APIs). Follow cross-references
   to the function that handles the thing you want to change. Name functions and structs as you go, and write
   them into MODLOG.md.

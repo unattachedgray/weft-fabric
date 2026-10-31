@@ -1,6 +1,6 @@
 ---
 name: reverse-engineer-anything
-description: Reverse engineer native, managed, Electron/JavaScript, packaged, and browser applications with REA. Use shipped-artifact or requested runtime evidence to explain features, compare versions, decompile code, or guide a reconstruction. Skip REA for ordinary source-repository architecture analysis.
+description: Reverse engineer native, managed, Electron/JavaScript, packaged, and browser applications with REA, and read game internals for mods and trainers (decompilers, live memory, asset formats). Use shipped-artifact or requested runtime evidence to explain features, compare versions, decompile code, or guide a reconstruction. Skip REA for ordinary source-repository architecture analysis.
 metadata:
   version: "24"
   tool_count: 116
@@ -8,6 +8,7 @@ metadata:
 ---
 For this shared installation, read [the local routing guide](../../../universal-modder/LOCAL-INTEGRATION.md).
 Use `game-re-tools rea` for the configured CLI; native persistent annotation uses the dedicated Ghidra server.
+For game internals (ILSpy, Cpp2IL, Cheat Engine, Frida, RenderDoc, data formats, replay oracles), read [references/game-internals.md](references/game-internals.md).
 
 
 # REA
