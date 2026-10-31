@@ -49,6 +49,23 @@ Prefer a supported API when the game has one. Never patch the executable on disk
 
 Capturing the owner's actual display needs their explicit confirmation every time. Private lab displays are outside that rule. Say first if a test will occupy their screen or keyboard.
 
+## Launch and load speed
+
+Measure before guessing. Bannerlord went from 61 s to 16 s on 2026-10-31, and 44 of those seconds were waits, not loading.
+
+- Sample one launch per second: per-thread CPU, `/proc/<pid>/io`, and the game's own log gaps. Idle CPU with no disk reads means the game is blocked, not loading.
+- Catch a blocked launch with `ss -tunap`. A `SYN-SENT` that does not change is a dead server, and it sits under `wineserver`, not the game process. On that run the only clue in the game log came seconds after the stall ended, so the log alone misattributes it.
+- For a single-player Bottles game, `flatpak run --unshare=network` makes dead connections fail at once. Local sockets still work. Test it first, and record that online features stop working.
+- A fixed gap that survives no-network is a timeout. Galaxy sign-in is 15 s with no GOG client installed. Read the managed caller before touching anything: if the game already survives the failure, jump to that failure. Any on-disk patch needs the owner's approval, an exact-byte check that refuses other builds, a stored original and a `--revert`, as in `Bannerlord Trainer/tools/patch-gog-signin.py`.
+- Skip splash videos from the module, in the hook that runs just before the check, and look for a built-in argument such as `/continuegame` first.
+- Time stages from real signals, ending at "playable" rather than "object exists". Keep a log of every launch and exclude runs with a dialog or a kill. A countdown from the median of the last five runs, re-anchored at each stage, was within 1 s here (`loadtimes.py`, `loadwatch.py`).
+- Show the countdown as an override-redirect window under `GDK_BACKEND=x11`. It sits above a fullscreen game on GNOME and takes no focus.
+- Log every in-game load too (`LoadTimer.cs`), so a later stall arrives as a number.
+
+## Monitor placement
+
+Games open on the middle monitor unless the owner chose another. Read `~/Games/trainer_common/game_monitor.py`, which is backed by `~/.config/game-trainers/monitor.json`, and put the choice in the trainer menu. Wine opens on the desktop primary, and it undoes moves for the first few seconds. Set `_NET_WM_WINDOW_OPACITY` to 0, move with `xplace.py`, wait for each move to settle, and restore opacity once the window holds still. Resending moves without waiting makes the window jump between monitors. Keep a launch button in the trainer.
+
 ## Install
 
 - A running game keeps the old module. If the game is open, arm `tools/install-on-exit.py` from the Bannerlord trainer as a `systemd-run --user` unit, and do not touch installed files.
@@ -65,6 +82,11 @@ Capturing the owner's actual display needs their explicit confirmation every tim
 - Some `.db` save files are not SQLite. Use ordinary byte-verified copies.
 - A green light means attached, not that every patch applied. Show the message.
 - A renamed copy of Ubuntu's `sleep` did not work as a test stand-in. The template copies the Python binary instead.
+
+- Never kill Bannerlord to end a test. It leaves `safely_exited = 0`, the next start stops at a safe mode prompt, and that dialog pollutes the timing. Use `tools/stop-test-game.py`. Check other games for the same crash marker.
+- A build failure must stop a test script. One chained script here installed and launched the old build.
+- `pkill -f` matches the shell that runs it when the pattern appears in the command. Use an anchored pattern from a script file.
+- Compare ownership and other game state by reading saves, without touching the running game. The format is in `Bannerlord Trainer/tools/read-save-fiefs.py`.
 
 ## Finish
 
