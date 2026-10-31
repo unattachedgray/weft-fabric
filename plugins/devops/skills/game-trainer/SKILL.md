@@ -62,6 +62,8 @@ Measure before guessing. Bannerlord went from 61 s to 16 s on 2026-10-31, and 44
 - Show the countdown as an override-redirect window under `GDK_BACKEND=x11`. It sits above a fullscreen game on GNOME and takes no focus.
 - Log every in-game load too (`LoadTimer.cs`), so a later stall arrives as a number.
 
+Slow saves or other bursts of parallel managed work under Wine can come from CPU count, not disk. Bannerlord saved 3x faster when narrowed to 7 physical P-cores with `SetProcessAffinityMask` on the save-start event and restored on save-over, so play keeps its cores. Sweep core sets before blaming storage, time the disk separately, and read `Cpus_allowed_list` from `/proc/<pid>/task/*/status` to prove the mask applied. Wine masks stop at its CPU count, so offline CPUs can cost the top host CPUs on restore. `flatpak run --env` did not reach the game through bottles-cli, so check `/proc/<pid>/environ`.
+
 ## Monitor placement
 
 Games open on the middle monitor unless the owner chose another. Read `~/Games/trainer_common/game_monitor.py`, which is backed by `~/.config/game-trainers/monitor.json`, and put the choice in the trainer menu. Wine opens on the desktop primary, and it undoes moves for the first few seconds. Set `_NET_WM_WINDOW_OPACITY` to 0, move with `xplace.py`, wait for each move to settle, and restore opacity once the window holds still. Resending moves without waiting makes the window jump between monitors. Keep a launch button in the trainer.
