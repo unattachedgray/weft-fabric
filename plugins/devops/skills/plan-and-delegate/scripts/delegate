@@ -1,0 +1,159 @@
+#!/usr/bin/env python3
+"""Run one planned task through a cheap implementer in a sandboxed worktree.
+
+    delegate run --repo R --task ID --prompt-file F --accept CMD [--impl M] [--feedback F] [--timeout S]
+    delegate verdict --task ID --outcome merged|rejected|taken-over
+    delegate clean --task ID
+    delegate report
+
+The implementer never gets commit authority: work stays staged in a throwaway worktree until a
+reviewer applies it. The ledger holds numbers and labels only, no prompt or code.
+"""
+import argparse, json, os, re, shutil, subprocess, sys, time
+
+STATE = os.path.expanduser(os.environ.get("DELEGATE_STATE", "~/.local/state/plan-delegate"))
+LEDGER = os.path.join(STATE, "ledger.jsonl")
+HOME = os.path.expanduser("~")
+DEFAULT_IMPL = "opencode-go/glm-5.3-flash"
+MAX_ROUNDS = 3
+MASK_DIRS = [".ssh", ".gnupg", ".config/weft/secrets", ".claude", ".codex", ".grok", ".aws", ".mozilla"]
+MASK_FILES = [".env", ".netrc", ".git-credentials", ".config/gh/hosts.yml"]
+# The real binary with the Connected profile, which holds the Go login. Not ~/.local/bin/opencode:
+# that wrapper's AMM preflight can load a local model onto the GPU before an API run.
+OPENCODE_BIN = os.path.join(HOME, "AI/harnesses/opencode/bin/opencode")
+PROFILE = os.path.join(HOME, ".config/opencode-connected")
+OPENCODE_ENV = {"OPENCODE_CONFIG": PROFILE + "/opencode.jsonc", "OPENCODE_CONFIG_DIR": PROFILE,
+                "XDG_CONFIG_HOME": PROFILE + "/xdg-config",
+                "XDG_DATA_HOME": os.path.join(HOME, ".local/share/opencode-connected"),
+                "XDG_CACHE_HOME": os.path.join(HOME, ".cache/opencode-connected"),
+                "XDG_STATE_HOME": os.path.join(HOME, ".local/state/opencode-connected")}
+RULES = ("You are implementing one task in this directory. Change only what the task names. Do not "
+         "commit. Do not ask questions: the task holds every decision. If something blocks you, say "
+         "so in your final message and stop.\n\n")
+
+
+def git(wt, *args):
+    return subprocess.run(["git", "-C", wt, *args], capture_output=True, text=True)
+
+
+def rows():
+    if not os.path.exists(LEDGER):
+        return []
+    return [json.loads(l) for l in open(LEDGER)]
+
+
+def record(**row):
+    os.makedirs(STATE, exist_ok=True)
+    with open(LEDGER, "a") as f:
+        f.write(json.dumps({"ts": int(time.time()), **row}) + "\n")
+
+
+def sandbox(wt, extra=()):
+    """Read-only system, private /tmp, credentials masked, only the worktree writable."""
+    cmd = ["bwrap", "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp",
+           "--bind", wt, wt, "--die-with-parent", "--chdir", wt]
+    for d in MASK_DIRS:
+        if os.path.isdir(os.path.join(HOME, d)):
+            cmd += ["--tmpfs", os.path.join(HOME, d)]
+    for f in MASK_FILES:
+        if os.path.exists(os.path.join(HOME, f)):
+            cmd += ["--ro-bind", "/dev/null", os.path.join(HOME, f)]
+    for d in extra:
+        os.makedirs(d, exist_ok=True)
+        cmd += ["--bind", d, d]
+    return cmd
+
+
+def worktree(task):
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", task):
+        sys.exit("task id must be a short slug")
+    return os.path.join(STATE, "wt", task)
+
+
+def run(a):
+    wt = worktree(a.task)
+    rounds = sum(1 for r in rows() if r.get("task") == a.task and r.get("kind") == "round" and r.get("changed"))
+    if rounds >= MAX_ROUNDS:
+        sys.exit(f"{a.task}: {MAX_ROUNDS} rounds used. Take the task yourself.")
+    if not os.path.exists(wt):
+        os.makedirs(os.path.dirname(wt), exist_ok=True)
+        made = git(a.repo, "worktree", "add", "--detach", wt, "HEAD")
+        if made.returncode:
+            sys.exit(made.stderr)
+    prompt = RULES + open(a.prompt_file, encoding="utf-8").read()
+    if a.feedback:
+        prompt += "\n\nReview feedback on the work already in this directory:\n" + open(a.feedback, encoding="utf-8").read()
+    extra = [OPENCODE_ENV[k] for k in ("XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME")]
+    started = time.time()
+    try:
+        impl = subprocess.run(sandbox(wt, extra) + [OPENCODE_BIN, "run", "--standalone", "--auto", "-m", a.impl, prompt],
+                              capture_output=True, text=True, timeout=a.timeout, stdin=subprocess.DEVNULL,
+                              env={**os.environ, **OPENCODE_ENV})
+        rc, tail = impl.returncode, (impl.stdout + impl.stderr)[-1500:]
+    except subprocess.TimeoutExpired:
+        rc, tail = 124, "implementer timed out"
+    git(wt, "add", "-A")
+    stat = git(wt, "diff", "--cached", "--shortstat").stdout.strip()
+    nums = [int(n) for n in re.findall(r"(\d+) (?:file|insertion|deletion)", stat)]
+    accept = subprocess.run(sandbox(wt) + ["bash", "-c", a.accept], capture_output=True, text=True,
+                            timeout=600, stdin=subprocess.DEVNULL)
+    if not stat:
+        print("INVALID: the implementer changed nothing, so the acceptance result proves nothing.")
+    record(kind="round", task=a.task, impl=a.impl, round=rounds + 1, seconds=int(time.time() - started),
+           impl_rc=rc, accept_rc=accept.returncode, changed=bool(stat), diff=nums)
+    print(f"--- implementer rc={rc}\n{tail}\n--- diff: {stat or 'none'}\n--- accept rc={accept.returncode}")
+    print(accept.stdout[-1200:] + accept.stderr[-800:])
+    print(f"--- review in: {wt}\n--- round {rounds + 1} of {MAX_ROUNDS}. Nothing is merged.")
+    return 0 if stat and rc == 0 and accept.returncode == 0 else 1
+
+
+def verdict(a):
+    record(kind="verdict", task=a.task, outcome=a.outcome)
+
+
+def clean(a):
+    wt = worktree(a.task)
+    common = git(wt, "rev-parse", "--path-format=absolute", "--git-common-dir").stdout.strip()
+    if common:
+        subprocess.run(["git", "--git-dir", common, "worktree", "remove", "--force", wt], capture_output=True)
+    shutil.rmtree(wt, ignore_errors=True)
+
+
+def report(_):
+    data = rows()
+    latest = {r["task"]: r["outcome"] for r in data if r.get("kind") == "verdict"}
+    tasks = list(latest)[-5:]
+    if not tasks:
+        print("no verdicts yet")
+        return 0
+    merged = sum(latest[t] == "merged" for t in tasks)
+    per = [sum(1 for r in data if r.get("task") == t and r.get("kind") == "round" and r.get("changed")) for t in tasks]
+    pct, mean = 100 * merged / len(tasks), sum(per) / len(per)
+    print(f"last {len(tasks)} tasks: {merged} merged ({pct:.0f}%), {mean:.1f} rounds per task")
+    if len(tasks) >= 5 and (pct < 60 or mean > 2):
+        print("STOP: under the bar. Raise it with the owner before delegating more.")
+        return 1
+    return 0
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    r = sub.add_parser("run")
+    r.add_argument("--repo", required=True); r.add_argument("--task", required=True)
+    r.add_argument("--prompt-file", required=True); r.add_argument("--accept", required=True)
+    r.add_argument("--impl", default=DEFAULT_IMPL); r.add_argument("--feedback")
+    r.add_argument("--timeout", type=int, default=1800)
+    r.set_defaults(fn=run)
+    v = sub.add_parser("verdict")
+    v.add_argument("--task", required=True)
+    v.add_argument("--outcome", required=True, choices=["merged", "rejected", "taken-over"])
+    v.set_defaults(fn=verdict)
+    c = sub.add_parser("clean"); c.add_argument("--task", required=True); c.set_defaults(fn=clean)
+    sub.add_parser("report").set_defaults(fn=report)
+    a = ap.parse_args()
+    sys.exit(a.fn(a) or 0)
+
+
+if __name__ == "__main__":
+    main()

@@ -356,6 +356,11 @@ git commit && git push
 - Anything under `principles/skills/` is deployed to **all** CLIs by
   `bash scripts/deploy-principles.sh`.
 
+A skill that sets a rule an agent could skip also ships a `pressure/` scenario that fails
+without it: `skill-audit`'s `scripts/pressure-test`. `validate-skills.py` rejects a `SKILL.md` at
+20,000 bytes or more, because compaction cuts it there; the four older skills past that limit
+are ratcheted in `SIZE_BASELINE` and may only shrink.
+
 ## 5. Retiring a skill
 
 Delete it — git holds the history. Do not create a `deprecated/` folder; that

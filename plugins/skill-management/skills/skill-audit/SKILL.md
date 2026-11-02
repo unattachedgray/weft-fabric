@@ -52,6 +52,15 @@ Three things qualify:
 
 Everything else is filler, however well written.
 
+## Pressure-test the rules
+
+A skill that sets a rule an agent could skip has to show that it changes behaviour.
+Before keeping one, read its rows in `~/.local/state/skill-audit/pressure.jsonl`. No row
+means unmeasured, and a last verdict of `NO-DELTA` makes it a retirement candidate.
+Measure with `scripts/pressure-test <skill-dir>`; `references/pressure-testing.md` has the
+scenario format and what each verdict means. New rule-setting skills need a `pressure/`
+scenario that fails without the skill before the skill is written.
+
 ## Retire on sight
 
 - **Teaches a language, framework or tool the model knows.** "JavaScript has 7

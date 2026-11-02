@@ -1,0 +1,107 @@
+#!/usr/bin/env python3
+"""Prove a skill changes what an agent does under pressure.
+
+    pressure-test <skill-dir> [--runs N] [--scenario FILE]
+
+Each scenario in <skill-dir>/pressure/*.md runs N times WITHOUT the skill (baseline)
+and N times WITH it (treated), through the economy gateway. Scoring is a regex, never a
+model opinion. See references/pressure-testing.md for the verdicts and the file format.
+
+Ledger: numbers only, in ~/.local/state/skill-audit/pressure.jsonl.
+"""
+import argparse, glob, json, os, re, subprocess, sys, time, urllib.error, urllib.request, uuid
+
+URL = os.environ.get("PRESSURE_URL", "http://127.0.0.1:8090/v1/chat/completions")
+LEDGER = os.path.expanduser(os.environ.get("PRESSURE_LEDGER", "~/.local/state/skill-audit/pressure.jsonl"))
+FM = re.compile(r"\A---\n(.*?)\n---\n(.*)\Z", re.S)
+
+
+class Invalid(Exception):
+    """The instrument failed, so no verdict is allowed."""
+
+
+def api_key() -> str:
+    if os.environ.get("API_KEY"):
+        return os.environ["API_KEY"]
+    out = subprocess.run(["wsecret", "run", "--only", "API_KEY", "llm", "--", "printenv", "API_KEY"],
+                         capture_output=True, text=True)
+    if out.returncode or not out.stdout.strip():
+        raise Invalid("no gateway key: wsecret returned nothing")
+    return out.stdout.strip()
+
+
+def ask(key: str, skill_text: str | None, scenario: str) -> str:
+    messages = [{"role": "system", "content": skill_text}] if skill_text else []
+    body = {"model": "auto", "messages": messages + [{"role": "user", "content": f"{scenario}\n\n[run {uuid.uuid4().hex[:8]}]"}],
+            "routing": {"version": 1, "project": "weft-fabric", "job": "skill-pressure-test",
+                        "execution": "background", "strength": "economy", "allow_escalation": False}}
+    req = urllib.request.Request(URL, json.dumps(body).encode(),
+                                 {"Content-Type": "application/json", "Authorization": f"Bearer {key}"})
+    try:
+        with urllib.request.urlopen(req, timeout=180) as r:
+            data = json.load(r)
+    except (urllib.error.URLError, TimeoutError, ValueError) as e:
+        raise Invalid(f"gateway failed: {e}")
+    text = (data.get("choices") or [{}])[0].get("message", {}).get("content") or ""
+    if not text.strip():
+        raise Invalid("empty reply: silence is not a pass or a fail")
+    return text
+
+
+def load(path: str) -> dict:
+    m = FM.match(open(path, encoding="utf-8").read())
+    if not m:
+        raise Invalid(f"{path}: needs a frontmatter block with expect: and violate:")
+    head = dict(l.split(":", 1) for l in m.group(1).splitlines() if ":" in l)
+    if not {"expect", "violate"} <= set(head):
+        raise Invalid(f"{path}: frontmatter needs both expect: and violate:")
+    return {"name": os.path.basename(path), "expect": re.compile(head["expect"].strip(), re.I),
+            "violate": re.compile(head["violate"].strip(), re.I), "text": m.group(2).strip()}
+
+
+def passed(s: dict, reply: str, show: str = "") -> bool:
+    ok = bool(s["expect"].search(reply)) and not s["violate"].search(reply)
+    if show:
+        print(f"  [{show} {'pass' if ok else 'FAIL'}] {reply.strip()[:400]!r}")
+    return ok
+
+
+def verdict(base: int, treated: int, runs: int) -> str:
+    if treated < runs:
+        return "LEAKS"      # the skill does not hold under pressure
+    return "NO-DELTA" if base == runs else "PROVEN"
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("skill_dir")
+    ap.add_argument("--runs", type=int, default=3)
+    ap.add_argument("--scenario")
+    ap.add_argument("--show", action="store_true", help="print replies, to debug a regex; the ledger stays numeric")
+    a = ap.parse_args()
+    skill = os.path.join(a.skill_dir, "SKILL.md")
+    files = [a.scenario] if a.scenario else sorted(glob.glob(os.path.join(a.skill_dir, "pressure", "*.md")))
+    try:
+        if not files:
+            raise Invalid(f"no scenarios in {a.skill_dir}/pressure/")
+        text, key, worst = open(skill, encoding="utf-8").read(), api_key(), 0
+        for f in files:
+            s = load(f)
+            base = sum(passed(s, ask(key, None, s["text"]), "baseline" if a.show else "") for _ in range(a.runs))
+            treated = sum(passed(s, ask(key, text, s["text"]), "treated" if a.show else "") for _ in range(a.runs))
+            v = verdict(base, treated, a.runs)
+            print(f"{v:9} {s['name']}  baseline {base}/{a.runs}  treated {treated}/{a.runs}")
+            os.makedirs(os.path.dirname(LEDGER), exist_ok=True)
+            with open(LEDGER, "a") as o:
+                o.write(json.dumps({"ts": int(time.time()), "skill": os.path.basename(os.path.realpath(a.skill_dir)),
+                                    "scenario": s["name"], "runs": a.runs, "baseline": base,
+                                    "treated": treated, "verdict": v}) + "\n")
+            worst = max(worst, {"PROVEN": 0, "NO-DELTA": 2, "LEAKS": 1}[v])
+        return worst
+    except Invalid as e:
+        print(f"INVALID   {e}", file=sys.stderr)
+        return 3
+
+
+if __name__ == "__main__":
+    sys.exit(main())

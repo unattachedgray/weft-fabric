@@ -49,6 +49,7 @@ most of the fix.
 6. **Throwaway harness** — a minimal subset (one service, mocked deps) exercising the bug path in one call.
 7. **Property/fuzz loop** — for "sometimes wrong output", 1000 random inputs, look for the failure mode.
 8. **Bisection harness** — if the bug appeared between two known states, automate "boot at X, check" so `git bisect run` works.
+   A test that leaves a stray file or state behind: `find-polluter <path> '<run cmd with {}>' <tests...>` in this directory names the first test that creates it.
 9. **Differential loop** — same input through old vs new (or two configs), diff outputs.
 10. **Structured HITL script** — last resort; if a human must click, drive *them* with a script so the loop stays structured and its output feeds back.
 

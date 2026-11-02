@@ -41,6 +41,29 @@ STRIP = "﻿ \t\r\n"
 # passed it. Quoting the value is the fix.
 UNQUOTED_COLON = re.compile(r"""^([A-Za-z0-9_-]+):[ \t]+(?!["'|>&*\[{])(.*:[ \t].*)$""")
 
+# Upstream superpowers (obra, MIT) reports that Claude Code re-attaches a skill cut off at
+# 20,000 characters after a compaction, so whatever sits past that point is gone for the
+# rest of the session. Keep rules above the cut: move detail into references/.
+MAX_SKILL_BYTES = 20000
+# Skills already over the limit on 2026-11-02. A ratchet, not an allowance: each may
+# shrink but never grow. Lower a number when the file shrinks; remove it when under.
+SIZE_BASELINE = {
+    "plugins/content/skills/docx/SKILL.md": 20083,
+    "plugins/review/skills/security-review/SKILL.md": 21433,
+    "plugins/reverse-tooling/skills/ghidra-iterative-re/SKILL.md": 39392,
+    "principles/skills/graphify/SKILL.md": 43789,
+}
+
+def size_problems(path: str, rel: str) -> list[str]:
+    size = os.path.getsize(path)
+    ceiling = SIZE_BASELINE.get(rel)
+    if ceiling is not None:
+        return [] if size <= ceiling else \
+            [f"grew to {size} bytes past its {ceiling}-byte baseline (limit 20000) — move detail into references/"]
+    if size >= MAX_SKILL_BYTES:
+        return [f"{size} bytes reaches the 20000-byte limit — compaction would cut it; move detail into references/"]
+    return []
+
 def _esc(d: str) -> str:
     return re.sub(r"\s+", " ", d).strip().replace('"', "'")
 
@@ -81,6 +104,7 @@ def check(path: str) -> list[str]:
     if not m:
         return ["missing YAML frontmatter delimited by --- (must be the first content)"]
     fm, probs = m.group(1), []
+    probs += size_problems(path, os.path.relpath(os.path.realpath(path), ROOT))
     probs += _yaml_problems(fm)
     nm = re.search(r"(?m)^name:\s*(.+?)\s*$", fm)
     if not nm:

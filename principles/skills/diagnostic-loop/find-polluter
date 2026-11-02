@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# find-polluter: run test files one at a time to find the first that creates a given path.
+# From systematic-debugging in obra/superpowers (MIT), made runner-neutral.
+# Usage: find-polluter <path-to-watch> '<run command with {} for the test>' <test-file>...
+set -u
+
+if [ "$#" -lt 3 ]; then
+  echo "usage: find-polluter <path-to-watch> '<run command with {} for the test>' <test-file>..." >&2
+  exit 2
+fi
+
+watch="$1"
+command="$2"
+shift 2
+
+if [ -e "$watch" ]; then
+  echo "already present" >&2
+  exit 2
+fi
+
+for test_file in "$@"; do
+  cmd="${command//\{\}/$test_file}"
+  bash -c "$cmd" >/dev/null 2>&1
+  if [ -e "$watch" ]; then
+    echo "polluter: $test_file"
+    exit 1
+  fi
+done
+
+echo "clean: $# tests"
+exit 0
