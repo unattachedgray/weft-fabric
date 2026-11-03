@@ -11,7 +11,9 @@
       ],
       "learn": true,
       "note": "A person at a Pi prompt. Full access by owner decision, 2026-11-02.",
-      "initiative": "act"
+      "initiative": "act",
+      "drive": true,
+      "audit": true
     },
     "scheduled": {
       "tools": [
@@ -23,7 +25,8 @@
         "find",
         "bash",
         "lcm_*",
-        "commitments"
+        "commitments",
+        "goal"
       ],
       "sandbox": true,
       "network": false,
