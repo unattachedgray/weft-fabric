@@ -2,56 +2,149 @@
   "version": 1,
   "principals": {
     "owner": {
-      "tools": ["*"],
-      "advisors": ["deepseek", "codex"],
+      "tools": [
+        "*"
+      ],
+      "advisors": [
+        "deepseek",
+        "codex"
+      ],
       "learn": true,
-      "note": "A person at a Pi prompt. Full access by owner decision, 2026-11-02."
+      "note": "A person at a Pi prompt. Full access by owner decision, 2026-11-02.",
+      "initiative": "act"
     },
     "scheduled": {
-      "tools": ["read", "write", "edit", "ls", "grep", "find", "bash", "lcm_*"],
+      "tools": [
+        "read",
+        "write",
+        "edit",
+        "ls",
+        "grep",
+        "find",
+        "bash",
+        "lcm_*",
+        "commitments"
+      ],
       "sandbox": true,
       "network": false,
-      "models": ["deepseek/deepseek-flash"],
-      "advisors": ["deepseek"],
+      "models": [
+        "deepseek/deepseek-flash"
+      ],
+      "advisors": [
+        "deepseek"
+      ],
       "daily_limit": 48,
       "bash_deny": [],
-      "note": "A timed run. Its task list is the owner's; its tools reach one workspace."
+      "note": "A timed run. Its task list is the owner's; its tools reach one workspace.",
+      "initiative": "act"
     },
     "gateway": {
-      "tools": ["read", "ls", "grep", "find", "lcm_*"],
+      "tools": [
+        "read",
+        "ls",
+        "grep",
+        "find",
+        "lcm_*"
+      ],
       "sandbox": true,
       "network": false,
-      "models": ["deepseek/deepseek-flash"],
+      "models": [
+        "deepseek/deepseek-flash"
+      ],
       "daily_limit": 200,
       "bash_deny": [],
-      "note": "Reserved for a chat gateway. A message that arrives this way is not the owner at a prompt."
+      "note": "Reserved for a chat gateway. A message that arrives this way is not the owner at a prompt.",
+      "initiative": "observe"
+    },
+    "scout": {
+      "tools": [
+        "read",
+        "ls",
+        "grep",
+        "find",
+        "write"
+      ],
+      "sandbox": true,
+      "network": false,
+      "models": [
+        "deepseek/deepseek-flash"
+      ],
+      "advisors": [],
+      "daily_limit": 2,
+      "bash_deny": [],
+      "initiative": "propose",
+      "note": "Reads a signal digest written by plain code and files plan packets. Acts on none of them."
     }
   },
   "advisors": {
-    "deepseek": { "kind": "pi", "model": "deepseek/deepseek-v4-pro", "thinking": "high", "daily_limit": 30, "timeout": 300 },
+    "deepseek": {
+      "kind": "pi",
+      "model": "deepseek/deepseek-v4-pro",
+      "thinking": "high",
+      "daily_limit": 30,
+      "timeout": 300
+    },
     "codex": {
-      "kind": "codex", "daily_limit": 3, "timeout": 600, "quota_lane": "codex", "min_remaining_pct": 30,
+      "kind": "codex",
+      "daily_limit": 3,
+      "timeout": 600,
+      "quota_lane": "codex",
+      "min_remaining_pct": 30,
       "note": "Astra quota: preserved first under the routing policy. Only for level hard."
     }
   },
   "rules": [
     {
-      "principals": ["gateway"],
-      "after": ["browser"],
-      "tools": ["browser", "mcp__*"],
+      "principals": [
+        "gateway"
+      ],
+      "after": [
+        "browser"
+      ],
+      "tools": [
+        "browser",
+        "mcp__*"
+      ],
       "action": "deny",
       "note": "Text from a web page must not steer further outside tools. Reserved: gateway has none of these today."
     }
   ],
   "authors": [
-    { "tool": "read", "author": "the file {path}" },
-    { "tool": "bash", "author": "command output" },
-    { "tool": "grep", "author": "files in the search path" },
-    { "tool": "find", "author": "files in the search path" },
-    { "tool": "ls", "author": "files in the search path" },
-    { "tool": "advisor", "author": "an advisor model" },
-    { "tool": "browser", "author": "a web page or its site" },
-    { "tool": "mcp__*", "author": "the {server} server" },
-    { "tool": "lcm_*", "author": "recalled session history" }
+    {
+      "tool": "read",
+      "author": "the file {path}"
+    },
+    {
+      "tool": "bash",
+      "author": "command output"
+    },
+    {
+      "tool": "grep",
+      "author": "files in the search path"
+    },
+    {
+      "tool": "find",
+      "author": "files in the search path"
+    },
+    {
+      "tool": "ls",
+      "author": "files in the search path"
+    },
+    {
+      "tool": "advisor",
+      "author": "an advisor model"
+    },
+    {
+      "tool": "browser",
+      "author": "a web page or its site"
+    },
+    {
+      "tool": "mcp__*",
+      "author": "the {server} server"
+    },
+    {
+      "tool": "lcm_*",
+      "author": "recalled session history"
+    }
   ]
 }
