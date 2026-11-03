@@ -107,6 +107,21 @@
       ],
       "action": "deny",
       "note": "Text from a web page must not steer further outside tools. Reserved: gateway has none of these today."
+    },
+    {
+      "principals": [
+        "owner"
+      ],
+      "after": [
+        "browser",
+        "mcp__browser_tunnel__*"
+      ],
+      "tools": [
+        "mcp__weft_vault__vault_write",
+        "mcp__weft_vault__vault_append"
+      ],
+      "action": "ask",
+      "note": "A web page was read in this session, so a vault write needs the owner's yes. Owner decision, 2026-11-03."
     }
   ],
   "authors": [
