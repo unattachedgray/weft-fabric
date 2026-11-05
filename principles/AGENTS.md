@@ -9,7 +9,7 @@ Owner policy and fleet wiring only. If a capable agent would do it unprompted, i
 
 ## Shared files
 
-This file and every skill live once in `/home/julian/dev/weft-fabric` and reach every CLI by symlink, never a copy. An edit here lands in every agent immediately, with no review step. CLIs differ in built-ins, so a skill redundant in yours may be another's only implementation. Fix an outright bug (broken path, dangling symlink, stale command) freely. Any edit to this file, and adding, retiring, restructuring or relinking anything, needs the owner's agreement. Read `ARRANGEMENT.md` first.
+This file and every skill live once in `~/dev/weft-fabric` and reach every CLI by symlink, never a copy. An edit here lands in every agent immediately, with no review step. CLIs differ in built-ins, so a skill redundant in yours may be another's only implementation. Fix an outright bug (broken path, dangling symlink, stale command) freely. Any edit to this file, and adding, retiring, restructuring or relinking anything, needs the owner's agreement. Read `ARRANGEMENT.md` first.
 
 ## AI routing
 

@@ -24,7 +24,7 @@ member:
   ~/.config/agents/mesh.json       the member list, so leaves can drive the fleet
 Lines outside the managed block are never touched. A key that already has a
 hand-placed line is left to that line, because a hand-placed line may carry a
-deliberate restriction (venge gates sd's default key to wnote/wrecall/wtask);
+deliberate restriction (the owner host gates one leaf's default key to wnote/wrecall/wtask);
 mesh reports it instead of overriding it. A member that is offline keeps its
 last-known entry, so one sleeping laptop does not drop out of everyone's config.
 Mesh is deliberately run once — at setup and by each enrollment — never on a
@@ -442,7 +442,7 @@ def cmd_vault_heal(quiet: bool) -> int:
 
     The owner's nightly `wtoken rotate-due` can only reach machines that are
     awake. Measured 2026-10-13: work slept Sep 25 – Oct 13, every nightly
-    rotation logged "deferred" into venge's journal only, the token expired and
+    rotation logged "deferred" into the owner host's journal only, the token expired and
     was garbage-collected, and every agent on work lost the vault silently. The
     leaf is the one party that knows when it is awake, so it closes the loop.
     """

@@ -1,6 +1,6 @@
 ---
 name: lan-machine-access
-description: Use a computer explicitly configured in the local SSH config, including the ThinkPad T430 and the ThinkCentre M725s, for tasks that require direct LAN access. Use when the user names a known LAN machine or when a requested machine-to-machine task can materially benefit from an already configured direct connection; do not scan the network or invent access on unconfigured machines.
+description: Use a computer explicitly configured in the local SSH config (another desktop or laptop on the same LAN) for tasks that require direct LAN access. Use when the user names a known LAN machine or when a requested machine-to-machine task can materially benefit from an already configured direct connection; do not scan the network or invent access on unconfigured machines.
 ---
 # LAN Machine Access
 
@@ -10,17 +10,16 @@ this skill or another tracked file.
 
 ## Known local aliases
 
-- `t430` — ThinkPad T430 running Linux Mint; also matches the user's phrases
-  "ThinkPad", "T430", and hostname `lenovo-t430-mint`.
-- `thinkcentre` — Lenovo ThinkCentre M725s running Ubuntu 24.04; also matches
-  "ThinkCentre", "M725s", and hostname `ubuntu-ThinkCentre-M725s`. Unlike the
-  T430 it also has a tailnet alias, `thinkcentre-ts`, for use off the LAN.
+The aliases, and the phrases the owner uses for each machine, live outside this
+repo: in `~/.ssh/config` and in the machine notes (`~/.config/agents/MACHINE.md`).
+Map the machine the user names to its alias there. Never write machine names,
+models or hostnames into this skill.
 
 This alias is a name, not proof that the current computer has access. Before
 using it, run:
 
 ```bash
-scripts/lan-machine-status t430
+scripts/lan-machine-status <alias>
 ```
 
 Proceed only when it reports `configured=yes`, `direct_route=yes`, and
@@ -31,7 +30,7 @@ nearby addresses.
 ## Behavior
 
 - When the user asks to inspect, configure, copy to/from, test, or run something
-  on a named configured machine, connect with `ssh t430` or transfer with
+  on a named configured machine, connect with `ssh <alias>` or transfer with
   `scp`/`sftp` through the alias. Keep remote changes within the request and
   verify them on the remote runtime.
 - When no alias is configured on this computer, remain dormant. Do not ask for

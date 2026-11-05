@@ -32,7 +32,7 @@ weren't using that day. That has already happened twice — see §2 and §1.
 
 **How this layout gets onto a machine and stays right — including troubleshooting — is in [FLEET.md](FLEET.md).** This file covers what the layout is and why it is owner-governed.
 
-Canonical location: `/home/julian/dev/weft-fabric`
+Canonical location: `~/dev/weft-fabric`
 Remote: `github.com/unattachedgray/weft-fabric`
 
 ---
@@ -40,7 +40,7 @@ Remote: `github.com/unattachedgray/weft-fabric`
 ## 1. One copy. Every CLI reaches it by symlink.
 
 ```
-/home/julian/dev/weft-fabric/
+~/dev/weft-fabric/
 ├── plugins/<plugin>/skills/<name>/SKILL.md     the skills
 ├── plugins/<plugin>/skills/<name>/output-styles/*.md   Claude-only output styles
 ├── principles/AGENTS.md                        the shared operating principles

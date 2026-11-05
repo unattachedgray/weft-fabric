@@ -137,7 +137,7 @@ class ProtocolTests(unittest.TestCase):
         self.assertIn(report["state"], ("ok", "drifted"))
         # Which CLIs are installed is a fact about the machine, not the code:
         # asserting "codex" passed on the owner host and failed on every leaf
-        # without it (measured on julgmkwork, claude only). Assert the portable
+        # without it (measured on a WSL leaf, claude only). Assert the portable
         # contract instead — something was detected and all of it is registered.
         known = {cli["name"] for cli in
                  json.loads((ROOT / "cli-targets.json").read_text())["clis"]}

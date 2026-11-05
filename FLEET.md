@@ -269,8 +269,8 @@ marker-delimited block in `authorized_keys`, and `~/.config/agents/mesh.json`.
 It finishes by opening a real session in every direction with strict host-key
 checking. Lines outside the managed block are never edited: a key that already
 has a hand-placed line keeps it, because such a line may carry a deliberate
-restriction — sd's default key on venge stays gated to `wnote/wrecall/wtask`
-(sd's unrestricted route is its own `venge-full` alias). Offline members keep
+restriction — one leaf's default key on the owner host stays gated to
+`wnote/wrecall/wtask`, with a separate alias for its unrestricted route. Offline members keep
 their last-known entry.
 
 **Mesh is run once, never on a timer** (owner decision, 2026-10-13): a loop that
@@ -368,7 +368,7 @@ names and modes on read-back. `--replace` is the explicit overwrite gate.
 
 ## Known gaps
 
-- **`t430` is untested against this system** — it was offline throughout. It is
+- **One LAN-only member is untested against this system** — it was offline throughout. It is
   LAN-only on the owner host's network, so it can only be enrolled from there.
 - **A private repo would cost the zero-credential bootstrap.** `curl | bash`
   works today because the repo is public and carries no secrets. Going private

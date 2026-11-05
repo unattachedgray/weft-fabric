@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-alias_name="${1:-t430}"
+alias_name="${1:-}"
+if [[ -z "$alias_name" ]]; then
+  echo "usage: lan-machine-status <ssh-alias>" >&2
+  echo "error=no_alias"
+  exit 2
+fi
 config_file="${LAN_MACHINE_SSH_CONFIG:-$HOME/.ssh/config}"
 
 case "$alias_name" in

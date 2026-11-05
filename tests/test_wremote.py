@@ -22,9 +22,9 @@ def load_wremote():
 
 
 STATE = {
-    "venge": {"ip": "100.0.0.1", "user": "julian", "pubkey": "ssh-ed25519 AAAAvenge", "host_key": "ssh-ed25519 AAAAhkv"},
-    "sd": {"ip": "100.0.0.2", "user": "julian", "pubkey": "ssh-ed25519 AAAAsd", "host_key": "ssh-ed25519 AAAAhks"},
-    "work": {"ip": "100.0.0.3", "user": "julian", "pubkey": "ssh-ed25519 AAAAwork", "host_key": "ssh-ed25519 AAAAhkw"},
+    "hub": {"ip": "100.0.0.1", "user": "user", "pubkey": "ssh-ed25519 AAAAhub", "host_key": "ssh-ed25519 AAAAhkv"},
+    "leaf1": {"ip": "100.0.0.2", "user": "user", "pubkey": "ssh-ed25519 AAAAleaf1", "host_key": "ssh-ed25519 AAAAhks"},
+    "leaf2": {"ip": "100.0.0.3", "user": "user", "pubkey": "ssh-ed25519 AAAAleaf2", "host_key": "ssh-ed25519 AAAAhkw"},
 }
 
 
@@ -34,18 +34,18 @@ class MeshRenderTests(unittest.TestCase):
         cls.w = load_wremote()
 
     def test_conf_lists_every_other_member_with_pinned_known_hosts(self):
-        conf = self.w.render_conf("work", STATE)
-        self.assertIn("Host venge\n    HostName 100.0.0.1", conf)
-        self.assertIn("Host sd\n", conf)
-        self.assertNotIn("Host work", conf)
+        conf = self.w.render_conf("leaf2", STATE)
+        self.assertIn("Host hub\n    HostName 100.0.0.1", conf)
+        self.assertIn("Host leaf1\n", conf)
+        self.assertNotIn("Host leaf2", conf)
         self.assertIn("UserKnownHostsFile ~/.ssh/known_hosts ~/.ssh/weft-mesh_known_hosts", conf)
-        known = self.w.render_known_hosts("work", STATE)
-        self.assertEqual(known.splitlines(), ["sd,100.0.0.2 ssh-ed25519 AAAAhks",
-                                              "venge,100.0.0.1 ssh-ed25519 AAAAhkv"])
+        known = self.w.render_known_hosts("leaf2", STATE)
+        self.assertEqual(known.splitlines(), ["hub,100.0.0.1 ssh-ed25519 AAAAhkv",
+                                              "leaf1,100.0.0.2 ssh-ed25519 AAAAhks"])
 
     def test_member_without_ip_is_left_out(self):
-        state = {**STATE, "laptop": {"user": "julian"}}
-        self.assertNotIn("laptop", self.w.render_conf("work", state))
+        state = {**STATE, "laptop": {"user": "user"}}
+        self.assertNotIn("laptop", self.w.render_conf("leaf2", state))
 
 
 class MeshApplyTests(unittest.TestCase):
@@ -63,24 +63,24 @@ class MeshApplyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
             (home / ".ssh").mkdir()
-            (home / ".ssh" / "config").write_text("Host venge\n    HostName old.example\n")
-            # A deliberately restricted line for sd's key must survive untouched.
-            hand = 'command="gate" ssh-ed25519 AAAAsd sd-gated'
+            (home / ".ssh" / "config").write_text("Host hub\n    HostName old.example\n")
+            # A deliberately restricted line for leaf1's key must survive untouched.
+            hand = 'command="gate" ssh-ed25519 AAAAleaf1 leaf1-gated'
             (home / ".ssh" / "authorized_keys").write_text(hand + "\n")
-            payload = self.w.payload_for("work", STATE)
+            payload = self.w.payload_for("leaf2", STATE)
 
             first = self.apply(home, payload)
             ak = (home / ".ssh" / "authorized_keys").read_text()
             self.assertTrue(ak.startswith(hand + "\n"))
-            self.assertIn("ssh-ed25519 AAAAvenge weft-mesh:venge", ak)
-            self.assertNotIn("weft-mesh:sd", ak)
-            self.assertTrue(any("sd:" in n for n in first["notes"]))
+            self.assertIn("ssh-ed25519 AAAAhub weft-mesh:hub", ak)
+            self.assertNotIn("weft-mesh:leaf1", ak)
+            self.assertTrue(any("leaf1:" in n for n in first["notes"]))
             cfg = (home / ".ssh" / "config").read_text()
             self.assertEqual(cfg.count(self.w.INCLUDE), 1)
-            self.assertLess(cfg.index(self.w.INCLUDE), cfg.index("Host venge"))
+            self.assertLess(cfg.index(self.w.INCLUDE), cfg.index("Host hub"))
             self.assertEqual(oct((home / ".ssh" / "authorized_keys").stat().st_mode & 0o777), "0o600")
             mesh = json.loads((home / ".config" / "agents" / "mesh.json").read_text())
-            self.assertEqual(mesh["self"], "work")
+            self.assertEqual(mesh["self"], "leaf2")
 
             second = self.apply(home, payload)
             self.assertEqual(second["changed"], [])
@@ -88,11 +88,11 @@ class MeshApplyTests(unittest.TestCase):
     def test_block_is_replaced_when_a_member_leaves(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
-            self.apply(home, self.w.payload_for("work", STATE))
-            smaller = {k: v for k, v in STATE.items() if k != "venge"}
-            self.apply(home, self.w.payload_for("work", smaller))
+            self.apply(home, self.w.payload_for("leaf2", STATE))
+            smaller = {k: v for k, v in STATE.items() if k != "hub"}
+            self.apply(home, self.w.payload_for("leaf2", smaller))
             ak = (home / ".ssh" / "authorized_keys").read_text()
-            self.assertNotIn("AAAAvenge", ak)
+            self.assertNotIn("AAAAhub", ak)
             self.assertEqual(ak.count(self.w.BEGIN), 1)
 
 

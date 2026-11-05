@@ -24,6 +24,7 @@ weft repo, the w* tools, or any credential in advance.
 from __future__ import annotations
 
 import argparse
+import getpass
 import os
 import re
 import shutil
@@ -364,7 +365,7 @@ def cmd_discover(do_enroll: bool, days: int) -> int:
 
     # Match enrolled machines by RESOLVED ADDRESS, not by name. Registry keys are
     # ssh aliases ("workstation-wvault") and bear no resemblance to tailnet
-    # hostnames ("venge-ubuntu"), so name matching silently reports everything
+    # hostnames ("owner-desktop"), so name matching silently reports everything
     # as new. `ssh -G` gives the address an alias actually resolves to.
     known_ips: set[str] = set()
     registry_path = Path.home() / ".config/weft/vault-machines.json"
@@ -418,7 +419,7 @@ def cmd_discover(do_enroll: bool, days: int) -> int:
         for host, ip in new:
             alias = re.sub(r"[^A-Za-z0-9-]", "-", host).lower()
             block = (f"\n# added by wmachine discover\nHost {alias}\n    HostName {ip}\n"
-                     f"    User {os.environ.get('USER', 'julian')}\n"
+                     f"    User {os.environ.get('USER') or getpass.getuser()}\n"
                      f"    IdentityFile ~/.ssh/id_ed25519\n    ServerAliveInterval 30\n")
             text = cfg.read_text(encoding="utf-8") if cfg.exists() else ""
             if f"Host {alias}\n" not in text:
