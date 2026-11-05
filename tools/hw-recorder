@@ -1,0 +1,289 @@
+#!/usr/bin/env python3
+"""hw-recorder: low-overhead hardware flight recorder for post-crash diagnosis.
+
+Runs as a systemd --user service, independent of any application, because the
+point is to outlive whatever took the machine down. Each boot gets its own
+telemetry, kernel and alert files under ~/.local/state/hw-recorder, fsync'd
+line by line so the last seconds before a hard reset survive.
+
+    hw-recorder install    write, enable and start the user service
+    hw-recorder status     last sample age, open hot spell, alert count
+    hw-recorder once       print one sample
+    hw-recorder run        the service body
+
+Works on any Linux box: sensors that are absent are skipped.
+"""
+
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import json
+import os
+import pathlib
+import re
+import shutil
+import subprocess
+import sys
+import threading
+import time
+
+STATE = pathlib.Path.home() / ".local/state/hw-recorder"
+UNIT = pathlib.Path.home() / ".config/systemd/user/hw-recorder.service"
+MAX_BYTES = 1024 ** 3
+PRUNE_EVERY_S = 3600
+HOT_C = 95.0
+COOL_C = 90.0
+COOL_HOLD_S = 300.0
+FILE = re.compile(r"^(telemetry|kernel|alerts)-(.+)\.(jsonl|log)$")
+KERNEL_ALERTS = (
+    "hardware error", "machine check", "mce:", "nvrm: xid", "gsp", "rm_init_adapter",
+    "general protection fault", "kernel panic", "watchdog", "soft lockup", "hard lockup",
+    "pcie bus error", "aer: uncorrected", "out of memory", "killed process",
+)
+# Still written to the kernel log; only kept out of the alert file.
+KERNEL_NOISE = ("bluetooth: hci",)
+
+
+def read_text(path: str | pathlib.Path) -> str | None:
+    try:
+        return pathlib.Path(path).read_text().strip()
+    except (OSError, ValueError):
+        return None
+
+
+def temperatures() -> dict[str, float]:
+    result: dict[str, float] = {}
+    for root in pathlib.Path("/sys/class/hwmon").glob("hwmon*"):
+        name = read_text(root / "name") or root.name
+        for value_path in root.glob("temp*_input"):
+            stem = value_path.name.removesuffix("_input")
+            label = read_text(root / f"{stem}_label") or stem
+            try:
+                result[f"{name}:{label}"] = round(float(read_text(value_path) or "") / 1000, 1)
+            except ValueError:
+                pass
+    return result
+
+
+def gpu_sample() -> dict[str, object]:
+    if not shutil.which("nvidia-smi"):
+        return {}
+    fields = "temperature.gpu,power.draw,power.limit,utilization.gpu,memory.used,memory.total,pstate"
+    names = ("temp_c", "power_w", "power_limit_w", "util_pct", "vram_mb", "vram_total_mb", "pstate")
+    try:
+        proc = subprocess.run(
+            ["nvidia-smi", f"--query-gpu={fields}", "--format=csv,noheader,nounits"],
+            text=True, capture_output=True, timeout=2, check=False,
+        )
+        return dict(zip(names, (item.strip() for item in proc.stdout.splitlines()[0].split(","))))
+    except (OSError, subprocess.SubprocessError, IndexError):
+        return {"error": "nvidia-smi unavailable"}
+
+
+def cpu_mhz() -> dict[str, float]:
+    values = []
+    for path in pathlib.Path("/sys/devices/system/cpu").glob("cpu[0-9]*/cpufreq/scaling_cur_freq"):
+        raw = read_text(path)
+        if raw and raw.isdigit():
+            values.append(int(raw) / 1000)
+    if not values:
+        return {}
+    return {"mean": round(sum(values) / len(values), 1), "max": round(max(values), 1)}
+
+
+def sample() -> dict[str, object]:
+    memory = {}
+    for line in (read_text("/proc/meminfo") or "").splitlines():
+        key, _, value = line.partition(":")
+        if key in {"MemAvailable", "SwapFree"}:
+            memory[key] = value.strip()
+    return {
+        "time": dt.datetime.now().astimezone().isoformat(timespec="milliseconds"),
+        "monotonic": round(time.monotonic(), 3),
+        "load": [round(item, 2) for item in os.getloadavg()],
+        "memory": memory,
+        "pressure_cpu": read_text("/proc/pressure/cpu"),
+        "pressure_memory": read_text("/proc/pressure/memory"),
+        "cpu_mhz": cpu_mhz(),
+        "cpu_offline": read_text("/sys/devices/system/cpu/offline") or "",
+        "temperatures_c": temperatures(),
+        "gpu": gpu_sample(),
+    }
+
+
+def kernel_alert(line: str) -> bool:
+    text = line.casefold()
+    return any(p in text for p in KERNEL_ALERTS) and not any(p in text for p in KERNEL_NOISE)
+
+
+class HotSpell:
+    """One alert for a whole hot period: it ends only after staying cool for a hold.
+
+    Under load the package swings through 90-100 C within seconds, so a plain
+    threshold pair would still log a spell every few seconds.
+    """
+
+    def __init__(self, hot_c: float = HOT_C, cool_c: float = COOL_C, hold_s: float = COOL_HOLD_S) -> None:
+        self.hot_c, self.cool_c, self.hold_s = hot_c, cool_c, hold_s
+        self.cool_since: float | None = None
+        self.started: str | None = None
+        self.started_mono = 0.0
+        self.peak = 0.0
+        self.peak_sensor = ""
+
+    def update(self, now: str, mono: float, temps: dict[str, float]) -> str | None:
+        if not temps:
+            return None
+        sensor, value = max(temps.items(), key=lambda item: item[1])
+        if self.started is None:
+            if value < self.hot_c:
+                return None
+            self.started, self.started_mono = now, mono
+            self.peak, self.peak_sensor = value, sensor
+            return f"HOT start {now} {sensor}={value}"
+        if value > self.peak:
+            self.peak, self.peak_sensor = value, sensor
+        if value >= self.cool_c:
+            self.cool_since = None
+            return None
+        if self.cool_since is None:
+            self.cool_since = mono
+        if mono - self.cool_since < self.hold_s:
+            return None
+        self.cool_since = None
+        line = (f"HOT end {now} started={self.started} seconds={round(mono - self.started_mono)} "
+                f"peak={self.peak_sensor}={self.peak}")
+        self.started = None
+        return line
+
+
+def prune(state_dir: pathlib.Path, current_boot: str, max_bytes: int = MAX_BYTES) -> list[str]:
+    """Delete whole boots, oldest first, until under the cap.
+
+    The current boot and the newest earlier boot always stay: after a crash the
+    earlier boot is the evidence. So the cap can be exceeded, never the rule.
+    """
+    boots: dict[str, list[pathlib.Path]] = {}
+    for path in state_dir.iterdir():
+        match = FILE.match(path.name)
+        if match:
+            boots.setdefault(match.group(2), []).append(path)
+    newest = lambda files: max(item.stat().st_mtime for item in files)
+    earlier = sorted((b for b in boots if b != current_boot), key=lambda b: newest(boots[b]))
+    total = sum(item.stat().st_size for files in boots.values() for item in files)
+    removed = []
+    for boot in earlier[:-1]:
+        if total <= max_bytes:
+            break
+        for item in boots[boot]:
+            total -= item.stat().st_size
+            item.unlink()
+        removed.append(boot)
+    return removed
+
+
+class Recorder:
+    def __init__(self, state_dir: pathlib.Path, interval: float) -> None:
+        self.state_dir, self.interval = state_dir, interval
+        state_dir.mkdir(parents=True, exist_ok=True)
+        self.boot_id = read_text("/proc/sys/kernel/random/boot_id") or "unknown"
+        self.telemetry = state_dir / f"telemetry-{self.boot_id}.jsonl"
+        self.kernel = state_dir / f"kernel-{self.boot_id}.log"
+        self.alerts = state_dir / f"alerts-{self.boot_id}.log"
+
+    @staticmethod
+    def append(path: pathlib.Path, line: str) -> None:
+        with path.open("a", buffering=1) as handle:
+            handle.write(line.rstrip("\n") + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+
+    def watch_kernel(self) -> None:
+        command = ["journalctl", "-k", "-f", "-n", "0", "-o", "short-iso", "--no-pager"]
+        while True:
+            try:
+                with subprocess.Popen(command, text=True, stdout=subprocess.PIPE,
+                                      stderr=subprocess.STDOUT) as proc:
+                    assert proc.stdout
+                    for line in proc.stdout:
+                        self.append(self.kernel, line)
+                        if kernel_alert(line):
+                            self.append(self.alerts, "KERNEL " + line)
+            except OSError as exc:
+                self.append(self.alerts, f"journal follower failed: {exc}")
+            time.sleep(2)
+
+    def run(self) -> None:
+        threading.Thread(target=self.watch_kernel, daemon=True).start()
+        spell = HotSpell()
+        next_prune = 0.0
+        while True:
+            current = sample()
+            self.append(self.telemetry, json.dumps(current, separators=(",", ":")))
+            alert = spell.update(str(current["time"]), float(current["monotonic"]),
+                                 current["temperatures_c"])  # type: ignore[arg-type]
+            if alert:
+                self.append(self.alerts, alert)
+            if time.monotonic() >= next_prune:
+                for boot in prune(self.state_dir, self.boot_id):
+                    self.append(self.alerts, f"PRUNED boot {boot}")
+                next_prune = time.monotonic() + PRUNE_EVERY_S
+            time.sleep(self.interval)
+
+
+def status(state_dir: pathlib.Path) -> int:
+    recorder = Recorder(state_dir, 2.0)
+    if not recorder.telemetry.exists():
+        print("no telemetry for this boot: recorder is not running")
+        return 1
+    age = time.time() - recorder.telemetry.stat().st_mtime
+    used = sum(item.stat().st_size for item in state_dir.iterdir())
+    lines = recorder.alerts.read_text().splitlines() if recorder.alerts.exists() else []
+    last = json.loads(recorder.telemetry.read_text().splitlines()[-1])
+    print(f"last sample {age:.0f}s ago · state {used / 1024 ** 2:.0f} MiB · alerts this boot {len(lines)}")
+    print(f"cpus offline: {last.get('cpu_offline') or 'none'}")
+    for line in lines[-5:]:
+        print(line[:160])
+    return 0 if age < 30 else 1
+
+
+def install() -> int:
+    UNIT.parent.mkdir(parents=True, exist_ok=True)
+    UNIT.write_text(f"""[Unit]
+Description=Hardware flight recorder (hw-recorder)
+
+[Service]
+Type=simple
+ExecStart={sys.executable} {pathlib.Path(__file__).resolve()} run
+Restart=always
+RestartSec=2
+Nice=10
+
+[Install]
+WantedBy=default.target
+""")
+    subprocess.run(["systemctl", "--user", "daemon-reload"], check=True)
+    subprocess.run(["systemctl", "--user", "enable", "--now", "hw-recorder.service"], check=True)
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Hardware flight recorder")
+    parser.add_argument("command", choices=("run", "once", "status", "install"))
+    parser.add_argument("--state-dir", type=pathlib.Path, default=STATE)
+    parser.add_argument("--interval", type=float, default=2.0)
+    args = parser.parse_args()
+    if args.command == "once":
+        print(json.dumps(sample(), indent=2))
+        return 0
+    if args.command == "status":
+        return status(args.state_dir)
+    if args.command == "install":
+        return install()
+    Recorder(args.state_dir, max(0.2, args.interval)).run()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

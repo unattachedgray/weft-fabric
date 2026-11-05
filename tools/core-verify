@@ -1,0 +1,56 @@
+#!/usr/bin/env python3
+"""core-verify: bounded deterministic CPU check, meant to be pinned to one logical CPU.
+
+    baseline=$(taskset -c 0 core-verify --seconds 10 | jq -r .digest)
+    taskset -c 16 core-verify --seconds 60 --reference "$baseline"
+
+Exit 1 with ok=false means that CPU computed a different answer: silent corruption.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import random
+import time
+
+
+def workload(seed: int) -> str:
+    rng = random.Random(seed)
+    values = [rng.getrandbits(64) for _ in range(8192)]
+    acc = 0x9E3779B97F4A7C15
+    for _ in range(24):
+        for value in values:
+            acc ^= value
+            acc = ((acc << 17) | (acc >> 47)) & 0xFFFFFFFFFFFFFFFF
+            acc = (acc * 0xD6E8FEB86659FD93 + 0xA5A3564E27F8862D) & 0xFFFFFFFFFFFFFFFF
+        values.reverse()
+    payload = acc.to_bytes(8, "little") + b"".join(value.to_bytes(8, "little") for value in values)
+    return hashlib.sha512(payload).hexdigest()
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--seconds", type=float, default=60)
+    parser.add_argument("--reference", help="expected digest; omit to print a baseline")
+    parser.add_argument("--seed", type=int, default=14900)
+    args = parser.parse_args()
+    deadline = time.monotonic() + max(1, args.seconds)
+    expected = args.reference or workload(args.seed)
+    iterations = 0
+    started = time.monotonic()
+    while time.monotonic() < deadline:
+        actual = workload(args.seed)
+        iterations += 1
+        if actual != expected:
+            print(json.dumps({"ok": False, "cpu": sorted(os.sched_getaffinity(0)), "iteration": iterations,
+                              "expected": expected, "actual": actual}))
+            raise SystemExit(1)
+    print(json.dumps({"ok": True, "cpu": sorted(os.sched_getaffinity(0)), "iterations": iterations,
+                      "seconds": round(time.monotonic() - started, 2), "digest": expected}))
+
+
+if __name__ == "__main__":
+    main()
