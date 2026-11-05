@@ -47,7 +47,7 @@ principles/skills/<name>/     portable skills for every CLI
 plugins/<name>/               plugin skills, symlinked into every CLI; also the unatt marketplace
 cursor/*.mdc                  Cursor project rules (it has no global file — see below)
 cli-targets.json              every CLI's paths, as DATA
-tools/                        wsecret, wtask, wmachine, wfleet, updateall
+tools/                        wsecret, wtask, wmachine, wfleet, updateall, hw-recorder, core-verify
 scripts/agentsync             the convergence command
 scripts/install-cursor-rule.sh   Cursor's per-project wiring (agentsync runs it)
 hooks/pre-commit              SKILL.md validation (agentsync arms it)

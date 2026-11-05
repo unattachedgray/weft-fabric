@@ -31,7 +31,7 @@ class ManifestTests(unittest.TestCase):
     def test_current_manifest_is_valid(self):
         raw = json.loads((ROOT / "cli-targets.json").read_text())
         clis = self.agentsync.validate_manifest(raw)
-        self.assertEqual([c["name"] for c in clis], ["claude", "codex", "gemini", "cursor", "dsh"])
+        self.assertEqual([c["name"] for c in clis], ["claude", "codex", "gemini", "cursor", "dsh", "pi"])
 
     def test_release_metadata_is_valid_and_compatible(self):
         release = self.agentsync.validate_release(json.loads((ROOT / "fabric-release.json").read_text()))

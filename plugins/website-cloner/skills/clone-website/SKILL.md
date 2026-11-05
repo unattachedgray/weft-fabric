@@ -3,7 +3,7 @@ name: clone-website
 description: "Clone a live web page into an editable codebase with measured fidelity: deterministic Playwright scripts extract computed styles, authored CSS, assets, motion and interaction evidence into a workspace; per-section specs are generated from that evidence; the model builds each section; pixelmatch + structural gates prove the result. Use whenever the user wants to clone, replicate, rebuild, reverse-engineer, copy or 'make a page that looks exactly like' a website or landing page, or asks how a site is built (teardown). Provide one or more URLs; supports Wayback Machine URLs. Not for 'inspired by' designs."
 argument-hint: "<url> [<url2> ...] [--stack html|next|vite] [--analyze-only] [--fidelity snapshot|rebuild]"
 user-invocable: true
-clis: claude, codex, gemini, cursor, dsh
+clis: claude, codex, gemini, cursor, dsh, pi
 clis-why: "The scripts are plain Node + Playwright and the workspace is files on disk, so every CLI can run the same loop. Claude Code additionally gets the three sub-agents in plugins/website-cloner/agents/; the others run the phases inline."
 ---
 # Clone Website

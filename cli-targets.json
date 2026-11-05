@@ -94,6 +94,16 @@
       "skills_dir": "$HOME/.dsh/skills",
       "plugin_skills": true,
       "note": "Weft Fabric manages explicit per-skill links so additions and removals converge like every other CLI."
+    },
+    {
+      "name": "pi",
+      "detect": ["test -d $HOME/AI/harnesses/homes/pi"],
+      "instructions": "$HOME/AGENTS.md",
+      "method": "symlink",
+      "machine_local": true,
+      "skills_dir": "$HOME/AI/harnesses/homes/pi/skills",
+      "plugin_skills": true,
+      "note": "Pi walks ancestors for AGENTS.md and dedupes by path, not real path, so a second link in its agent directory would load the principles twice under $HOME. As with Cursor, projects outside $HOME get none of it."
     }
   ]
 }

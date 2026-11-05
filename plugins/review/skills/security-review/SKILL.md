@@ -8,7 +8,7 @@ enhanced_from:
   - best-practices
   - coding-standards
   - code-reviewer
-clis: codex, gemini, cursor, dsh
+clis: codex, gemini, cursor, dsh, pi
 clis-why: Claude Code ships its own /security-review; this is the implementation for CLIs that don't.
 ---
 # Security Review
@@ -137,14 +137,14 @@ export async function createUser(input: unknown) {
   try {
     // Parse and validate
     const validated = CreateUserSchema.parse(input)
-    
+
     // Safe to use validated data
     return await db.users.create(validated)
   } catch (error) {
     if (error instanceof z.ZodError) {
       // Don't expose internal details in error
-      return { 
-        success: false, 
+      return {
+        success: false,
         error: 'Invalid input data'
       }
     }
@@ -161,23 +161,23 @@ function validateFileUpload(file: File) {
   if (file.size > MAX_SIZE) {
     throw new Error('File too large (max 5MB)')
   }
-  
+
   // 2. MIME type check (whitelist)
   const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
   if (!ALLOWED_TYPES.includes(file.type)) {
     throw new Error('Invalid file type')
   }
-  
+
   // 3. Extension check (whitelist)
   const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp']
   const extension = file.name.toLowerCase().match(/\.[^.]+$/)?.[0]
   if (!extension || !ALLOWED_EXTENSIONS.includes(extension)) {
     throw new Error('Invalid file extension')
   }
-  
+
   // 4. File name sanitization
   const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
-  
+
   return { valid: true, sanitizedName }
 }
 ```
@@ -249,14 +249,14 @@ export async function deleteUser(userId: string, requesterId: string) {
   const requester = await db.users.findUnique({
     where: { id: requesterId }
   })
-  
+
   if (!requester) {
     return NextResponse.json(
       { error: 'Unauthorized' },
       { status: 401 }
     )
   }
-  
+
   // Step 2: Authorize - verify requester has permission
   if (requester.role !== 'admin' && requester.id !== userId) {
     return NextResponse.json(
@@ -264,10 +264,10 @@ export async function deleteUser(userId: string, requesterId: string) {
       { status: 403 }
     )
   }
-  
+
   // Step 3: Execute operation
   await db.users.delete({ where: { id: userId } })
-  
+
   return NextResponse.json({ success: true })
 }
 ```
@@ -321,7 +321,7 @@ function renderUserContent(html: string) {
     ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'p', 'br', 'ul', 'ol', 'li'],
     ALLOWED_ATTR: []  // No attributes allowed
   })
-  
+
   return <div dangerouslySetInnerHTML={{ __html: clean }} />
 }
 
@@ -393,14 +393,14 @@ const token = csrf.generate(sessionId)
 export async function POST(request: Request) {
   const formData = await request.formData()
   const token = formData.get('csrf_token')
-  
+
   if (!csrf.verify(token, sessionId)) {
     return NextResponse.json(
       { error: 'Invalid CSRF token' },
       { status: 403 }
     )
   }
-  
+
   // Process request
 }
 ```
@@ -471,16 +471,16 @@ console.log('Payment:', { cardNumber, cvv, amount })
 console.log('Database URL:', process.env.DATABASE_URL)
 
 // ✅ CORRECT: Redact sensitive data
-console.log('User login:', { 
-  email, 
+console.log('User login:', {
+  email,
   userId,
   // password is never logged
 })
 
-console.log('Payment:', { 
-  last4: card.last4, 
+console.log('Payment:', {
+  last4: card.last4,
   userId,
-  amount 
+  amount
   // cardNumber and cvv never logged
 })
 
@@ -495,7 +495,7 @@ console.log('Database:', {
 // ❌ WRONG: Exposing internal details
 catch (error) {
   return NextResponse.json(
-    { 
+    {
       error: error.message,  // May leak implementation details
       stack: error.stack,    // Exposes code structure
       query: sqlQuery        // May contain sensitive data
@@ -513,7 +513,7 @@ catch (error) {
     userId: request.userId,
     timestamp: new Date().toISOString()
   })
-  
+
   // Send generic error to user
   return NextResponse.json(
     { error: 'An error occurred. Please try again later.' },
@@ -611,7 +611,7 @@ describe('Security Tests', () => {
     const response = await fetch('/api/protected')
     expect(response.status).toBe(401)
   })
-  
+
   // Authorization tests
   test('requires admin role for admin operations', async () => {
     const response = await fetch('/api/admin/delete-user', {
@@ -619,7 +619,7 @@ describe('Security Tests', () => {
     })
     expect(response.status).toBe(403)
   })
-  
+
   // Input validation tests
   test('rejects invalid email format', async () => {
     const response = await fetch('/api/users', {
@@ -628,7 +628,7 @@ describe('Security Tests', () => {
     })
     expect(response.status).toBe(400)
   })
-  
+
   // SQL injection tests
   test('safely handles malicious SQL input', async () => {
     const response = await fetch('/api/users?email=' + encodeURIComponent("'; DROP TABLE users; --"))
@@ -637,26 +637,26 @@ describe('Security Tests', () => {
     const users = await db.users.count()
     expect(users).toBeGreaterThan(0)
   })
-  
+
   // XSS tests
   test('sanitizes HTML in user content', async () => {
     const maliciousContent = '<script>alert("XSS")</script>'
     const sanitized = sanitizeHtml(maliciousContent)
     expect(sanitized).not.toContain('<script>')
   })
-  
+
   // Rate limiting tests
   test('enforces rate limits', async () => {
     const requests = Array(101).fill(null).map(() =>
       fetch('/api/endpoint')
     )
-    
+
     const responses = await Promise.all(requests)
     const rateLimited = responses.filter(r => r.status === 429)
-    
+
     expect(rateLimited.length).toBeGreaterThan(0)
   })
-  
+
   // CSRF tests
   test('rejects requests without CSRF token', async () => {
     const response = await fetch('/api/update-profile', {
@@ -682,10 +682,10 @@ describe('Security Tests', () => {
 // ✅ CORRECT: Always validate server-side
 export async function POST(request: Request) {
   const data = await request.json()
-  
+
   // Server-side validation (critical)
   const validated = UserSchema.parse(data)
-  
+
   // Proceed with validated data
 }
 ```
@@ -734,11 +734,11 @@ export async function GET(request: Request, { params }: { params: { id: string }
 // ✅ CORRECT: Verify ownership
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   const session = await getSession(request)
-  
+
   if (session.userId !== params.id && session.role !== 'admin') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
-  
+
   const user = await db.users.findUnique({ where: { id: params.id } })
   return NextResponse.json(user)
 }

@@ -1,7 +1,7 @@
 ---
 name: security-audit
 description: "Run a security audit of the system installation and report findings. Use when the user wants to audit their system/installation security posture (as opposed to reviewing code changes — that's security-review)."
-clis: codex, gemini, cursor, dsh
+clis: codex, gemini, cursor, dsh, pi
 clis-why: Short audit checklist — same reason as security-review.
 ---
 # Security Audit

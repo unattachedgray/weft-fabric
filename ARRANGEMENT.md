@@ -90,6 +90,8 @@ tools/            symlinked into ~/.local/bin by agentsync
   wnote, wrecall  symlinks to wtask (it dispatches on its invoked name): bank
                   to / recall from the vault wiki with the same local-else-ssh rule
   wmachine        enrol a whole machine from the owner host
+  hw-recorder     hardware crash flight recorder; `hw-recorder install` adds its user service
+  core-verify     deterministic per-CPU check for silent arithmetic corruption
   wfleet          which machines are converged, and sync them
   wremote         behind wagent mesh/run/update/vault-heal: ssh mesh, run
                   anywhere, fleet updates, vault self-heal (FLEET.md)
@@ -134,6 +136,24 @@ project in `/mnt/c` loads none of it.
 Roots come from `~/.config/agents/cursor-roots` (machine-local), defaulting to
 `~/dev`. The script also reports Cursor projects no root covers, so the gap is
 visible instead of silent.
+
+### Pi
+
+Pi's skills are per-skill links in its own agent directory,
+`~/AI/harnesses/homes/pi/skills`. Its instructions come from `~/AGENTS.md`, the
+link Cursor also uses: Pi walks ancestors for `AGENTS.md` and dedupes by path
+rather than real path, so a link in the agent directory would load the
+principles twice under `$HOME`. Projects outside `$HOME` get none of it. A skill
+with a `clis:` line reaches Pi only if the line names `pi`. MCP servers are
+Pi's own, in `homes/pi/mcp.json`, and the fabric does not manage them.
+
+### Authority
+
+`policy/authority.json` is the one statement of who may do what: principals,
+tightening rules and the author of each tool's output. A client enforces it in
+code and carries no rules of its own. Pi does so through `~/dev/pete`; no other
+CLI reads it yet. It is owner-governed like `principles/AGENTS.md`, and a change
+reaches Pi at its next session.
 
 **Machine-specific facts do not belong in this repo.** A path, hostname, or
 "tool X is missing here" that is true on one box and false on another must live in
