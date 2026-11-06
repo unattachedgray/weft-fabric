@@ -3,7 +3,6 @@ name: llm-api-pricing
 description: Bundled LLM API pricing reference for picking models by task and computing usage costs. Use when the user asks "which model should I use for X", "how much does Y cost", "what's the cheapest model for translation / summarization / image gen / OCR / TTS / transcription", or when implementing per-request cost tracking. Reads from `references/benchmark.md` (refreshed monthly via the bundled pipeline) — does NOT guess prices from training data.
 allowed-tools: Read, Glob, WebSearch, WebFetch, Bash
 ---
-
 # LLM API Pricing — model selection + cost tracking
 
 Self-contained pricing reference. Use it to pick a model for a task and to wire usage-based cost tracking into code. The `references/benchmark.md` file is the source of truth — its refresh pipeline is bundled, so the data stays current without external dependencies.
@@ -60,7 +59,7 @@ Skip for: prompting / fine-tuning / output-format questions (those belong to `se
 ### Freshness check
 
 If `references/benchmark.md` is more than 3 months old, either:
-- Run `scripts/update_benchmark.py` (requires `GOOGLE_API_KEY` + `ANTHROPIC_API_KEY`)
+- Run `scripts/update_benchmark.py` (requires `GEMINI_FREE_API_KEY` — or `GEMINI_API_KEY` / `GOOGLE_API_KEY` — plus `ANTHROPIC_API_KEY`)
 - Or WebSearch the provider's pricing page directly and update the relevant rows in `benchmark.md` by hand
 
 A monthly GitHub Action template is in `scripts/update-benchmark.yml.example` — copy it into your `.github/workflows/` to automate.

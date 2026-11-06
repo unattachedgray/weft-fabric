@@ -8,7 +8,9 @@ Three-stage pipeline:
   3. Generate: Claude Haiku 4.5 rewrites references/benchmark.md from validated data.
 
 Environment:
-  GOOGLE_API_KEY    — Google AI Studio key (stage 1)
+  GEMINI_FREE_API_KEY — Gemini key for stage 1 (free tier covers it); falls back to
+                        GEMINI_API_KEY, then GOOGLE_API_KEY. On the owner host:
+                        wsecret run --only GEMINI_FREE_API_KEY,ANTHROPIC_API_KEY llm -- ...
   ANTHROPIC_API_KEY — Anthropic key (stage 3)
 
 Usage:
@@ -66,7 +68,11 @@ def extract_with_gemini(pages: dict[str, str]) -> dict:
     """Stage 1: structured JSON extraction. Use Gemini Flash-Lite — free tier covers this."""
     from google import genai
 
-    client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
+    key = next((os.environ[n] for n in ("GEMINI_FREE_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY")
+                if os.environ.get(n)), None)
+    if not key:
+        raise SystemExit("Set GEMINI_FREE_API_KEY (or GEMINI_API_KEY / GOOGLE_API_KEY) for stage 1.")
+    client = genai.Client(api_key=key)
     schema_hint = (
         "Return JSON: {provider: [{model, input_per_1m, output_per_1m, "
         "batch_input, batch_output, free_tier_notes}]}. Numbers only for prices. "
@@ -76,7 +82,7 @@ def extract_with_gemini(pages: dict[str, str]) -> dict:
     for provider, text in pages.items():
         prompt = f"Extract pricing for {provider} from this page:\n\n{text[:50000]}\n\n{schema_hint}"
         resp = client.models.generate_content(
-            model="gemini-2.5-flash-lite",
+            model="gemini-3.5-flash-lite",  # 2.5 models 404 for projects created after Nov 2026
             contents=prompt,
             config={"response_mime_type": "application/json"},
         )
