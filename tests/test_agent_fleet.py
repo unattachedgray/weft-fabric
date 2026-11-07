@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import importlib.machinery
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -283,6 +284,22 @@ class FleetRegistryTests(unittest.TestCase):
             legacy.write_text(json.dumps({"vaulted": {"host": "vault-host"}, "plain": {"host": "old"}}))
             with mock.patch.object(self.wfleet, "REGISTRY", fleet), mock.patch.object(self.wfleet, "LEGACY_REGISTRY", legacy):
                 self.assertEqual(self.wfleet.registry(), {"vaulted": "vault-host", "plain": "plain-host"})
+
+    def test_an_offline_leaf_is_not_a_fleet_fault(self):
+        # The fleet must work with any leaf switched off (owner rule, 2026-11-07).
+        rows = {"up": {"err": ""}, "off": {"err": "unreachable"}, "slow": {"err": "timeout"}}
+        def probe(name, host):
+            out = {"name": name, "host": host, "fingerprint": "abc1234", "version": "v", "fabric_protocol": 9,
+                   "timer": "active", "clis": [], "state": "ok", "err": rows[name]["err"]}
+            return out
+        release = {"version": "v", "minimum_fabric_protocol": 1}
+        with mock.patch.object(self.wfleet, "registry", return_value={n: n for n in rows}), \
+             mock.patch.object(self.wfleet, "probe", side_effect=probe), \
+             mock.patch.object(self.wfleet, "local_head", return_value="abc1234"), \
+             mock.patch.object(Path, "read_text", return_value=json.dumps(release)), \
+             mock.patch("sys.stdout", new_callable=io.StringIO) as out:
+            self.assertEqual(self.wfleet.cmd_status(False), 0)
+        self.assertIn("offline=2", out.getvalue())
 
     def test_no_vault_machine_is_recorded_atomically(self):
         with tempfile.TemporaryDirectory() as tmp:

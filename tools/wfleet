@@ -10,7 +10,9 @@ truth instead of duplicating CLI detection and link checks here.
 
 Machines come from ~/.config/agents/fleet.json. The old vault registry is read
 as a migration fallback, but vault access is optional and no longer defines
-fleet membership. A machine whose host is "local" is checked in place.
+fleet membership. A machine whose host is "local" is checked in place. A machine
+that does not answer is shown as offline and is not a fault: the fleet must work
+with any leaf switched off.
 
 Silent drift is the failure mode this exists to kill: a symlink to a stale
 commit resolves exactly like a symlink to a current one, so nothing breaks
@@ -129,10 +131,14 @@ def cmd_status(full: bool) -> int:
         rows = list(pool.map(lambda kv: probe(*kv), sorted(machines.items())))
 
     print(f"{'MACHINE':<22}{'VERSION':<10}{'BUILD':<9}{'STATE':<12}{'NEEDS':<12}CLIS")
-    counts = {"ok": 0, "drifted": 0, "unreachable": 0, "outdated": 0,
+    counts = {"ok": 0, "offline": 0, "drifted": 0, "unreachable": 0, "outdated": 0,
               "protocol-error": 0, "error": 0, "unknown": 0, "missing": 0}
     for r in rows:
-        if r["err"]:
+        # A leaf that is off is a state, not a fault: nothing in the fleet may
+        # depend on a leaf being on. Only a leaf that answers can be unhealthy.
+        if r["err"] in ("unreachable", "timeout"):
+            state, fingerprint, version, needs = "offline", "-", "-", "-"
+        elif r["err"]:
             state, fingerprint, version, needs = r["err"], "-", "-", "reachable"
         else:
             state, fingerprint, version = r["state"], r["fingerprint"][:7], r["version"]
@@ -155,9 +161,9 @@ def cmd_status(full: bool) -> int:
     print()
     summary = "  ".join(f"{k}={v}" for k, v in counts.items() if v)
     print(summary or "no machines")
-    unhealthy = sum(v for k, v in counts.items() if k != "ok")
+    unhealthy = sum(v for k, v in counts.items() if k not in ("ok", "offline"))
     if unhealthy:
-        print("run `wagent sync` to repair reachable drift; unreachable machines retain their last state")
+        print("run `wagent sync` to repair reachable drift")
     return 1 if unhealthy else 0
 
 
@@ -198,6 +204,9 @@ fi
         else:
             r = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", host, "bash -s"],
                                input=cmd, capture_output=True, text=True, timeout=300)
+        if r.returncode == 255:   # ssh could not connect: the leaf is off
+            print("offline; skipped")
+            continue
         print((r.stdout or r.stderr).strip() or f"(no output, rc={r.returncode})")
         rc |= 0 if r.returncode == 0 else 1
     return rc

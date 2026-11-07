@@ -295,6 +295,13 @@ built and deliberately withdrawn on 2026-10-13; it is not part of the fabric.
 The owner's `wtoken rotate-due` can only reach machines that are awake. Since
 2026-11-07 it runs hourly and renews any reachable leaf whose token is a day old,
 so a token is lost only after its leaf is off for the whole term (30 or 90 days).
+
+**No leaf is required.** The fleet must work with any leaf switched off (owner
+rule, 2026-11-07). An offline leaf is a state, not a fault: `wfleet status` shows
+it as `offline` and leaves it out of the exit code, `wfleet sync` skips it, and
+`wtoken rotate-due` never fails because of it. Only the owner host, and a leaf
+that answers but is broken, can make these fail. A leaf repairs its own drift and
+vault access when it is next on (hourly `wagent sync --local`, `vault-heal`).
 Measured 2026-10-13: work slept Sep 25 – Oct 13, every nightly rotation logged
 "deferred" into the owner's journal only, the token expired and was
 garbage-collected, and every agent on work lost the vault without a word. Now the
