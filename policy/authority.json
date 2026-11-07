@@ -16,7 +16,8 @@
       "audit": true,
       "drive_models": [
         "deepseek/*",
-        "amm/qwen/qwen3.8-27b"
+        "amm/qwen/qwen3.8-27b",
+        "sd/qwen/qwen3.8-27b"
       ],
       "drive_note": "Self-drive only for models measured unharmed by it. gemma-4-26b gamed its own check 2 of 2 trials on 2026-11-03."
     },
@@ -36,6 +37,7 @@
       "sandbox": true,
       "network": false,
       "models": [
+        "sd/qwen/qwen3.8-27b",
         "deepseek/deepseek-flash"
       ],
       "advisors": [
