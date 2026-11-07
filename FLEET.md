@@ -292,7 +292,9 @@ built and deliberately withdrawn on 2026-10-13; it is not part of the fabric.
 
 ### Vault tokens survive a sleeping leaf
 
-The owner's nightly `wtoken rotate-due` can only reach machines that are awake.
+The owner's `wtoken rotate-due` can only reach machines that are awake. Since
+2026-11-07 it runs hourly and renews any reachable leaf whose token is a day old,
+so a token is lost only after its leaf is off for the whole term (30 or 90 days).
 Measured 2026-10-13: work slept Sep 25 – Oct 13, every nightly rotation logged
 "deferred" into the owner's journal only, the token expired and was
 garbage-collected, and every agent on work lost the vault without a word. Now the
